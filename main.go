@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/nickjones/proc_box/agents"
 	"github.com/streadway/amqp"
@@ -36,21 +37,48 @@ func main() {
 	}
 
 	args := flag.Args()
-	job, err := agents.NewControlledProcess(args[0], args[1:])
-
-	select {
-	case cmd := <-rc.Commands:
-		fmt.Println("Got a command ", cmd)
+	var cmdArgs []string
+	var cmd string
+	if len(args) > 0 {
+		cmd = args[0]
+	} else {
+		log.Fatal("Did you forget a command to run?")
+		return
 	}
 
+	log.Debugf("cmd: %s cmdArgs: %q", cmd, cmdArgs)
+
 	done := make(chan error)
+
+	job, err := agents.NewControlledProcess(cmd, args, done)
+	if err != nil {
+		log.Fatalf("Failed to create a NewControlledProcess: %s", err)
+		return
+	}
+
+	fmt.Printf("%#v\n", job)
 
 	go monitor(rc, job, done)
 
 	_ = <-done
-	return
 }
 
-func monitor(rc *agents.RemoteControl, job *agents.Job, done chan error) {
-
+func monitor(rc *agents.RemoteControl, job agents.JobControl, done chan error) {
+	var err error
+	for {
+		select {
+		case cmd := <-rc.Commands:
+			log.Debugf("Got a command %#v\n", cmd)
+			switch cmd.Command {
+			case "done":
+				fmt.Println("Ending task")
+				done <- err
+			default:
+				log.Debugf("Unknown command: %s\n", cmd)
+			}
+		case _ = <-job.Done():
+			log.Debugln("Command exited gracefully; shutting down.")
+			done <- err
+		}
+	}
 }

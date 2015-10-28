@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"encoding/json"
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
@@ -13,7 +14,13 @@ type RemoteControl struct {
 	channel  *amqp.Channel
 	tag      string
 	done     chan error
-	Commands chan string
+	Commands chan RemoteControlCommand
+}
+
+// RemoteControlCommand is the unmarshalled JSON remote command to control the process.
+type RemoteControlCommand struct {
+	Command   string
+	Arguments []string
 }
 
 // NewRemoteControl creates a new watcher for external commands through AMQP
@@ -26,7 +33,7 @@ func NewRemoteControl(amqp *amqp.Connection, routingKey string, exchange string)
 		nil,
 		"proc_box_remote_control", // consumerTag
 		nil,
-		make(chan string),
+		make(chan RemoteControlCommand),
 	}
 
 	rc.channel, err = rc.conn.Channel()
@@ -83,10 +90,14 @@ func (rc *RemoteControl) Shutdown() error {
 	return <-rc.done
 }
 
-func handle(deliveries <-chan amqp.Delivery, done chan error, commands chan string) {
+func handle(deliveries <-chan amqp.Delivery, done chan error, commands chan RemoteControlCommand) {
 	for d := range deliveries {
-		log.Info(fmt.Sprintf("%s", d.Body))
-		commands <- fmt.Sprintf("%q", d.Body)
+		var cmd RemoteControlCommand
+		err := json.Unmarshal(d.Body, &cmd)
+		if err != nil {
+			log.Warn(fmt.Sprintf("Failed to unmarshal JSON from AMQP message: %s", err))
+		}
+		commands <- cmd
 		d.Ack(false)
 	}
 	done <- nil
