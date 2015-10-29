@@ -3,6 +3,7 @@ package agents
 import (
 	"fmt"
 	"os/exec"
+	"syscall"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/shirou/gopsutil/process"
@@ -75,19 +76,38 @@ func (j *Job) Stop() error {
 
 // Resume continues a suspended process
 func (j *Job) Resume() error {
-	// TODO: Implement me!
+	if err := j.Proc.Resume(); err != nil {
+		log.Warnf("Error received calling resume on sub-process: %s", err)
+		return err
+	}
 	return nil
 }
 
 // Suspend pauses a running process
 func (j *Job) Suspend() error {
-	// TODO: Implement me!
+	if err := j.Proc.Suspend(); err != nil {
+		log.Warnf("Error received calling suspend on sub-process: %s", err)
+		return err
+	}
 	return nil
 }
 
 // Kill forcefully stops a process
 func (j *Job) Kill(sig int64) error {
-	// TODO: Implement me!
+	var err error
+
+	switch sig {
+	case -9:
+		err = j.Proc.Kill()
+	default:
+		signal := syscall.Signal(sig)
+		err = j.Proc.SendSignal(signal)
+	}
+
+	if err != nil {
+		log.Warnf("Error received calling kill on sub-process: %s", err)
+		return err
+	}
 	return nil
 }
 
