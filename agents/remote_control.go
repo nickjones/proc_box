@@ -38,7 +38,7 @@ func NewRemoteControl(amqp *amqp.Connection, routingKey string, exchange string)
 
 	rc.channel, err = rc.conn.Channel()
 	if err != nil {
-		return nil, fmt.Errorf("Unable to open a channel on AMQP connection: %s", err)
+		return nil, fmt.Errorf("Unable to open a channel on AMQP connection: %s\n", err)
 	}
 
 	remCtrlQueue, err := rc.channel.QueueDeclare(
@@ -51,7 +51,7 @@ func NewRemoteControl(amqp *amqp.Connection, routingKey string, exchange string)
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to acquire a remote control queue: %s", err)
+		return nil, fmt.Errorf("Failed to acquire a remote control queue: %s\n", err)
 	}
 
 	if err = rc.channel.QueueBind(
@@ -61,7 +61,7 @@ func NewRemoteControl(amqp *amqp.Connection, routingKey string, exchange string)
 		false,             // nowait
 		nil,               // arguments
 	); err != nil {
-		return nil, fmt.Errorf("Failed to bind the queue: %s", err)
+		return nil, fmt.Errorf("Failed to bind the queue: %s\n", err)
 	}
 
 	deliveries, err := rc.channel.Consume(
@@ -74,7 +74,7 @@ func NewRemoteControl(amqp *amqp.Connection, routingKey string, exchange string)
 		nil,   // arguments
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to consume queue: %s", err)
+		return nil, fmt.Errorf("Failed to consume queue: %s\n", err)
 	}
 
 	go handle(deliveries, rc.done, rc.Commands)
@@ -95,7 +95,7 @@ func handle(deliveries <-chan amqp.Delivery, done chan error, commands chan Remo
 		var cmd RemoteControlCommand
 		err := json.Unmarshal(d.Body, &cmd)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Failed to unmarshal JSON from AMQP message: %s", err))
+			log.Warnf("Failed to unmarshal JSON from AMQP message: %s\n", err)
 		}
 		commands <- cmd
 		d.Ack(false)

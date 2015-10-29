@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"strconv"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/nickjones/proc_box/agents"
@@ -28,12 +29,12 @@ func main() {
 
 	amqpConn, err := amqp.Dial(*uri)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Failed to connect to AMQP: %s", err))
+		log.Fatalf("Failed to connect to AMQP: %s\n", err)
 	}
 
 	rc, err := agents.NewRemoteControl(amqpConn, *rmtKey, *exchange)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("NewRemoteControl failed: %s", err))
+		log.Fatalf("NewRemoteControl failed: %s\n", err)
 	}
 
 	args := flag.Args()
@@ -46,13 +47,13 @@ func main() {
 		return
 	}
 
-	log.Debugf("cmd: %s cmdArgs: %q", cmd, cmdArgs)
+	log.Debugf("cmd: %s cmdArgs: %q\n", cmd, cmdArgs)
 
 	done := make(chan error)
 
 	job, err := agents.NewControlledProcess(cmd, args, done)
 	if err != nil {
-		log.Fatalf("Failed to create a NewControlledProcess: %s", err)
+		log.Fatalf("Failed to create a NewControlledProcess: %s\n", err)
 		return
 	}
 
@@ -70,8 +71,33 @@ func monitor(rc *agents.RemoteControl, job agents.JobControl, done chan error) {
 		case cmd := <-rc.Commands:
 			log.Debugf("Got a command %#v\n", cmd)
 			switch cmd.Command {
-			case "done":
-				fmt.Println("Ending task")
+			case "suspend":
+				log.Debugln("RemoteCommand: Suspend")
+				job.Suspend()
+			case "resume":
+				log.Debugln("RemoteCommand: Resume")
+				job.Resume()
+			case "kill":
+				log.Debugln("RemoteCommand: Kill")
+				var args int64
+				var err error
+				if len(cmd.Arguments) == 0 {
+					args = -9
+				} else {
+					args, err = strconv.ParseInt(cmd.Arguments[0], 10, 32)
+					if err != nil {
+						log.Warnf("Unable to parse kill command argument[0] into int: %s\n", err)
+						args = -9
+					}
+				}
+				job.Kill(args)
+				done <- err
+			case "stop":
+				var err error
+				log.Debugln("RemoteCommand: Stop")
+				if err := job.Stop(); err != nil {
+					log.Fatalf("Error received while stopping sub-process: %s\n", err)
+				}
 				done <- err
 			default:
 				log.Debugf("Unknown command: %s\n", cmd)

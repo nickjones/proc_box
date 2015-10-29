@@ -13,7 +13,7 @@ type JobControl interface {
 	Stop() error
 	Suspend() error
 	Resume() error
-	Kill() error
+	Kill(int64) error
 	Done() chan error
 }
 
@@ -43,14 +43,14 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 	// for resource monitoring.
 	err := j.Cmd.Start()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to execute sub-process: %s", err)
+		return nil, fmt.Errorf("Failed to execute sub-process: %s\n", err)
 	}
 
 	pid := int32(j.Cmd.Process.Pid)
 
 	j.Proc, err = process.NewProcess(pid)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to create process.NewProcess: %s", err)
+		return nil, fmt.Errorf("Unable to create process.NewProcess: %s\n", err)
 	}
 
 	// Background waiting for the job to finish and emit a done channel message
@@ -66,7 +66,10 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 
 // Stop gracefully ends the process
 func (j *Job) Stop() error {
-	// TODO: Implement me!
+	if err := j.Proc.Terminate(); err != nil {
+		log.Warnf("Error received calling terminate on sub-process: %s\n", err)
+		return err
+	}
 	return nil
 }
 
@@ -83,7 +86,7 @@ func (j *Job) Suspend() error {
 }
 
 // Kill forcefully stops a process
-func (j *Job) Kill() error {
+func (j *Job) Kill(sig int64) error {
 	// TODO: Implement me!
 	return nil
 }
