@@ -11,11 +11,13 @@ import (
 
 // JobControl provides a command interface for control
 type JobControl interface {
+	Start() error
 	Stop() error
 	Suspend() error
 	Resume() error
 	Kill(int64) error
 	Done() chan error
+	Process() *process.Process
 }
 
 // Job contains a handle to the actual process struct.
@@ -37,6 +39,8 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 	}
 
 	j.Cmd = exec.Command(cmd)
+	// Map all child processes under this tree so Kill really ends everything.
+	j.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	j.Cmd.Args = arguments
 	log.Debugf("%#v\n", j.Cmd)
 
@@ -114,4 +118,9 @@ func (j *Job) Kill(sig int64) error {
 // Done returns the channel used when the process is finished
 func (j *Job) Done() chan error {
 	return j.done
+}
+
+// Process returns a handle to the underlying process through gopsutil.
+func (j *Job) Process() *process.Process {
+	return j.Proc
 }

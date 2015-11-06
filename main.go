@@ -2,8 +2,8 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"strconv"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/nickjones/proc_box/agents"
@@ -11,11 +11,12 @@ import (
 )
 
 var (
-	uri          = flag.String("uri", "amqp://guest:guest@localhost:5672", "AMQP connection URI.")
-	exchange     = flag.String("exchange", "amq.topic", "AMQP exchange to bind.")
-	rmtKey       = flag.String("rmt_key", "proc_box.remote_control", "AMQP routing key for remote process control.")
-	procStatsKey = flag.String("proc_stats_key", "proc_box.stats", "AMQP routing key prefix for proc stats.")
-	debugMode    = flag.Bool("debug", false, "Debug logging enable")
+	uri           = flag.String("uri", "amqp://guest:guest@localhost:5672", "AMQP connection URI.")
+	exchange      = flag.String("exchange", "amq.topic", "AMQP exchange to bind.")
+	rmtKey        = flag.String("rmt_key", "proc_box.remote_control", "AMQP routing key for remote process control.")
+	procStatsKey  = flag.String("proc_stats_key", "proc_box.stats", "AMQP routing key prefix for proc stats.")
+	statsInterval = flag.Duration("proc_stats_interval", 5*time.Minute, "Interval to emit process statistics.")
+	debugMode     = flag.Bool("debug", false, "Debug logging enable")
 )
 
 func init() {
@@ -32,6 +33,7 @@ func main() {
 		log.Fatalf("Failed to connect to AMQP: %s\n", err)
 	}
 
+	// Establish remote control channel prior to execution
 	rc, err := agents.NewRemoteControl(amqpConn, *rmtKey, *exchange)
 	if err != nil {
 		log.Fatalf("NewRemoteControl failed: %s\n", err)
@@ -51,13 +53,28 @@ func main() {
 
 	done := make(chan error)
 
+	// Initialize job
 	job, err := agents.NewControlledProcess(cmd, args, done)
 	if err != nil {
 		log.Fatalf("Failed to create a NewControlledProcess: %s\n", err)
 		return
 	}
 
-	fmt.Printf("%#v\n", job)
+	// Establish process statistics gathering agent
+	// Agent will need to initially wait for the process to start, but should
+	// establish an AMQP channel for message generation prior to the process
+	// starting.
+	stats, err := agents.NewProcessStats(
+		amqpConn,
+		*procStatsKey,
+		*exchange,
+		&job,
+		*statsInterval,
+	)
+
+	log.Debugf("%#v\n", stats)
+
+	log.Debugf("%#v\n", job)
 
 	go monitor(rc, job, done)
 
