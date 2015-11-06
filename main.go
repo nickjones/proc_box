@@ -13,10 +13,11 @@ import (
 var (
 	uri           = flag.String("uri", "amqp://guest:guest@localhost:5672", "AMQP connection URI.")
 	exchange      = flag.String("exchange", "amq.topic", "AMQP exchange to bind.")
-	rmtKey        = flag.String("rmt_key", "proc_box.remote_control", "AMQP routing key for remote process control.")
-	procStatsKey  = flag.String("proc_stats_key", "proc_box.stats", "AMQP routing key prefix for proc stats.")
-	statsInterval = flag.Duration("proc_stats_interval", 5*time.Minute, "Interval to emit process statistics.")
+	rmtKey        = flag.String("rkey", "proc_box.remote_control", "AMQP routing key for remote process control.")
+	procStatsKey  = flag.String("skey", "proc_box.stats", "AMQP routing key prefix for proc stats.")
+	statsInterval = flag.Duration("sint", 5*time.Minute, "Interval to emit process statistics.")
 	debugMode     = flag.Bool("debug", false, "Debug logging enable")
+	noWarn        = flag.Bool("nowarn", false, "Disable warnings on stats collection.")
 )
 
 func init() {
@@ -26,6 +27,8 @@ func init() {
 func main() {
 	if *debugMode {
 		log.SetLevel(log.DebugLevel)
+	} else if *noWarn {
+		log.SetLevel(log.ErrorLevel)
 	}
 
 	amqpConn, err := amqp.Dial(*uri)

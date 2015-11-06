@@ -7,6 +7,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/process"
 	"github.com/streadway/amqp"
 )
@@ -31,11 +32,13 @@ type ProcessStatCollector struct {
 
 // ProcessStatSample contains a single sample of the underlying process system usage.
 type ProcessStatSample struct {
-	Memory     *process.MemoryInfoStat
-	CPUTimes   *cpu.CPUTimesStat
-	IOCounters *process.IOCountersStat
+	Host       host.HostInfoStat
+	Memory     process.MemoryInfoStat
+	CPUTimes   cpu.CPUTimesStat
+	IOCounters process.IOCountersStat
 	OpenFiles  []process.OpenFilesStat
 	NumThreads int32
+	Pid        int32
 }
 
 // NewProcessStats establishes a new AMQP channel and configures sampling period
@@ -92,19 +95,34 @@ func (ps *ProcessStatCollector) Sample() error {
 
 	stat := ProcessStatSample{}
 
-	stat.Memory, err = proc.MemoryInfo()
+	stat.Pid = proc.Pid
+
+	hostinfo, err := host.HostInfo()
+	if err != nil {
+		log.Warnf("Error encountered collecting host stats: %s", err)
+	} else {
+		stat.Host = *hostinfo
+	}
+
+	meminfo, err := proc.MemoryInfo()
 	if err != nil {
 		log.Warnf("Error encountered collecting memory stats: %s", err)
+	} else {
+		stat.Memory = *meminfo
 	}
 
-	stat.CPUTimes, err = proc.CPUTimes()
+	cputimes, err := proc.CPUTimes()
 	if err != nil {
 		log.Warnf("Error encountered collecting CPU stats: %s", err)
+	} else {
+		stat.CPUTimes = *cputimes
 	}
 
-	stat.IOCounters, err = proc.IOCounters()
+	iocnt, err := proc.IOCounters()
 	if err != nil {
 		log.Warnf("Error encountered collecting I/O stats: %s", err)
+	} else {
+		stat.IOCounters = *iocnt
 	}
 
 	stat.OpenFiles, err = proc.OpenFiles()
@@ -117,11 +135,7 @@ func (ps *ProcessStatCollector) Sample() error {
 		log.Warnf("Error encountered collecting thread count stats: %s", err)
 	}
 
-	log.Debugf("Memory sample: %#v\n", stat.Memory)
-	log.Debugf("CPU sample: %#v\n", stat.CPUTimes)
-	log.Debugf("I/O sample: %#v\n", stat.IOCounters)
-	log.Debugf("Files sample: %#v\n", stat.OpenFiles)
-	log.Debugf("Threads sample: %#v\n", stat.NumThreads)
+	log.Debugf("Sample: %#v\n", stat)
 
 	var body []byte
 	body, err = json.Marshal(stat)
