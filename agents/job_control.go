@@ -1,7 +1,9 @@
 package agents
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os/exec"
 	"syscall"
 
@@ -39,6 +41,17 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 	}
 
 	j.Cmd = exec.Command(cmd)
+
+	// Collect stdout from the process to redirect o real stdout
+	stdout, err := j.Cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to acquire stdout: %s", err)
+	}
+	stderr, err := j.Cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to acquire stderr: %s", err)
+	}
+
 	// Map all child processes under this tree so Kill really ends everything.
 	j.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	j.Cmd.Args = arguments
@@ -46,7 +59,7 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 
 	// Start the sub-process but don't wait for completion to pickup the Pid
 	// for resource monitoring.
-	err := j.Cmd.Start()
+	err = j.Cmd.Start()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to execute sub-process: %s\n", err)
 	}
@@ -58,6 +71,9 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 		return nil, fmt.Errorf("Unable to create process.NewProcess: %s\n", err)
 	}
 
+	go stdRedirect(stdout)
+	go stdRedirect(stderr)
+
 	// Background waiting for the job to finish and emit a done channel message
 	// when complete.
 	go func(j *Job) {
@@ -67,6 +83,13 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 	}(j)
 
 	return j, nil
+}
+
+func stdRedirect(r io.Reader) {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		fmt.Printf("%s\n", scanner.Text())
+	}
 }
 
 // Stop gracefully ends the process
