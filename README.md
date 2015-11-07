@@ -7,7 +7,7 @@ resource pressure.  This project also provides remote control of the process
 through AMQP JSON messages.  Also, proc_box will emit statistical usage
 measurements of the contained process for analysis by other tools.
 
-[![Build Status](https://travis-ci.org/nickjones/proc_box.svg)](https://travis-ci.org/Masterminds/glide) [![Go Report Card](http://goreportcard.com/badge/nickjones/proc_box)](http://goreportcard.com/report/nickjones/proc_box)
+[![Build Status](https://travis-ci.org/nickjones/proc_box.svg)](https://travis-ci.org/nickjones/proc_box) [![Go Report Card](http://goreportcard.com/badge/nickjones/proc_box)](http://goreportcard.com/report/nickjones/proc_box)
 
 ## Features
 This project is still very much alpha and likely is unusable in it's current
