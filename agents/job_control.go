@@ -42,7 +42,7 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 
 	j.Cmd = exec.Command(cmd)
 
-	// Collect stdout from the process to redirect o real stdout
+	// Collect stdout from the process to redirect to real stdout
 	stdout, err := j.Cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to acquire stdout: %s", err)

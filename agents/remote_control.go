@@ -28,6 +28,10 @@ type RemoteControlCommand struct {
 func NewRemoteControl(amqp *amqp.Connection, routingKey string, exchange string) (*RemoteControl, error) {
 	var err error
 
+	if amqp == nil {
+		return nil, fmt.Errorf("Provided AMQP connection is nil")
+	}
+
 	rc := &RemoteControl{
 		amqp,
 		nil,
