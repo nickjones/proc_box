@@ -98,10 +98,13 @@ func (ps *ProcessStatCollector) Sample() error {
 	stat.Pid = proc.Pid
 
 	hostinfo, err := host.HostInfo()
+	var hostnameRoutingKey string
 	if err != nil {
 		log.Warnf("Error encountered collecting host stats: %s", err)
+		hostnameRoutingKey = ""
 	} else {
 		stat.Host = *hostinfo
+		hostnameRoutingKey = fmt.Sprintf(".%s", stat.Host.Hostname)
 	}
 
 	meminfo, err := proc.MemoryInfo()
@@ -140,11 +143,12 @@ func (ps *ProcessStatCollector) Sample() error {
 	var body []byte
 	body, err = json.Marshal(stat)
 
+	routingKey := fmt.Sprintf("%s%s", ps.routingKey, hostnameRoutingKey)
 	err = ps.channel.Publish(
-		ps.exchange,   // publish to an exchange
-		ps.routingKey, // routing to queues
-		false,         // mandatory
-		false,         // immediate
+		ps.exchange, // publish to an exchange
+		routingKey,  // routing to queues
+		false,       // mandatory
+		false,       // immediate
 		amqp.Publishing{
 			Headers:         amqp.Table{},
 			ContentType:     "text/javascript",
