@@ -2,7 +2,10 @@ package main
 
 import (
 	"flag"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -79,15 +82,46 @@ func main() {
 
 	log.Debugf("%#v\n", job)
 
-	go monitor(rc, job, done)
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
+
+	go monitor(signals, rc, job, stats, done)
 
 	_ = <-done
 }
 
-func monitor(rc *agents.RemoteControl, job agents.JobControl, done chan error) {
+func monitor(
+	signals chan os.Signal,
+	rc *agents.RemoteControl,
+	job agents.JobControl,
+	ps agents.ProcessStats,
+	done chan error,
+) {
 	var err error
 	for {
 		select {
+		// Catch incoming signals and operate on them as if they were remote commands
+		case sig := <-signals:
+			switch sig {
+			case syscall.SIGINT:
+				log.Debugln("Caught SIGINT, graceful shutdown")
+				ps.Sample()
+				err = job.Stop()
+				done <- err
+			case syscall.SIGTERM:
+				log.Debugln("Caught SIGTERM, end abruptly")
+				job.Kill(-9)
+				done <- err
+			case syscall.SIGHUP:
+				log.Debugln("Caught SIGHUP, emit stats")
+				ps.Sample()
+			case syscall.SIGQUIT:
+				log.Debugln("Caught SIGQUIT, graceful shutdown")
+				ps.Sample()
+				err = job.Stop()
+				done <- err
+			}
+		// Process incoming remote commands, toss unknown requests
 		case cmd := <-rc.Commands:
 			log.Debugf("Got a command %#v\n", cmd)
 			switch cmd.Command {
@@ -115,10 +149,14 @@ func monitor(rc *agents.RemoteControl, job agents.JobControl, done chan error) {
 			case "stop":
 				var err error
 				log.Debugln("RemoteCommand: Stop")
+				ps.Sample()
 				if err := job.Stop(); err != nil {
 					log.Fatalf("Error received while stopping sub-process: %s\n", err)
 				}
 				done <- err
+			case "sample":
+				log.Debugln("RemoteCommand: Sample")
+				ps.Sample()
 			default:
 				log.Debugf("Unknown command: %s\n", cmd)
 			}
