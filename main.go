@@ -14,13 +14,14 @@ import (
 )
 
 var (
-	uri           = flag.String("uri", "amqp://guest:guest@localhost:5672", "AMQP connection URI.")
-	exchange      = flag.String("exchange", "amq.topic", "AMQP exchange to bind.")
-	rmtKey        = flag.String("rkey", "proc_box.remote_control", "AMQP routing key for remote process control.")
-	procStatsKey  = flag.String("skey", "proc_box.stats", "AMQP routing key prefix for proc stats.")
-	statsInterval = flag.Duration("sint", 5*time.Minute, "Interval to emit process statistics.")
-	debugMode     = flag.Bool("debug", false, "Debug logging enable")
-	noWarn        = flag.Bool("nowarn", false, "Disable warnings on stats collection.")
+	uri              = flag.String("uri", "amqp://guest:guest@localhost:5672", "AMQP connection URI.")
+	exchange         = flag.String("exchange", "amq.topic", "AMQP exchange to bind.")
+	rmtKey           = flag.String("rkey", "proc_box.remote_control", "AMQP routing key for remote process control.")
+	procStatsKey     = flag.String("skey", "proc_box.stats", "AMQP routing key prefix for proc stats.")
+	statsInterval    = flag.Duration("sint", 5*time.Minute, "Interval to emit process statistics.")
+	wallclockTimeout = flag.Duration("wallclock", 10*time.Minute, "The time until wallclock timeout of the process.")
+	debugMode        = flag.Bool("debug", false, "Debug logging enable")
+	noWarn           = flag.Bool("nowarn", false, "Disable warnings on stats collection.")
 )
 
 func init() {
@@ -85,7 +86,11 @@ func main() {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 
-	go monitor(signals, rc, job, stats, done)
+	timer, err := agents.NewTimer(*wallclockTimeout)
+	log.Debugf("Starting timer with timeout of: %v\n", *wallclockTimeout)
+	timer.Start()
+
+	go monitor(signals, rc, job, stats, timer, done)
 
 	_ = <-done
 }
@@ -95,6 +100,7 @@ func monitor(
 	rc *agents.RemoteControl,
 	job agents.JobControl,
 	ps agents.ProcessStats,
+	timer agents.Timer,
 	done chan error,
 ) {
 	var err error
@@ -160,6 +166,10 @@ func monitor(
 			default:
 				log.Debugf("Unknown command: %s\n", cmd)
 			}
+		case timeoutMsg := <-timer.Done():
+			log.Debugf("Timer timeout message: %s\n", timeoutMsg)
+			// This seems to block for some reason. To be DRY I do not want to replicate the case stop above.
+			//rc.Commands <- agents.RemoteControlCommand{"stop", nil}
 		case _ = <-job.Done():
 			log.Debugln("Command exited gracefully; shutting down.")
 			done <- err
