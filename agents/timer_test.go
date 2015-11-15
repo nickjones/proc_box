@@ -6,7 +6,6 @@ import (
 )
 
 func TestTimeout(t *testing.T) {
-	done := make(chan error)
 	timer, err := NewTimer(2 * time.Second)
 	if err != nil {
 		t.Error("Error creating new timer")
@@ -21,7 +20,7 @@ func TestTimeout(t *testing.T) {
 		timeout <- true
 	}()
 	select {
-	case <-done:
+	case <-timer.Done():
 		// timer timed out.
 		// Test passes
 	case <-timeout:
