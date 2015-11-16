@@ -13,7 +13,6 @@ import (
 
 // JobControl provides a command interface for control
 type JobControl interface {
-	Start() error
 	Stop() error
 	Suspend() error
 	Resume() error
