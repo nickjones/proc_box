@@ -18,7 +18,7 @@ var (
 	exchange         = flag.String("exchange", "amq.topic", "AMQP exchange to bind.")
 	rmtKey           = flag.String("rkey", "proc_box.remote_control", "AMQP routing key for remote process control.")
 	procStatsKey     = flag.String("skey", "proc_box.stats", "AMQP routing key prefix for proc stats.")
-	statsInterval    = flag.Duration("sint", 5*time.Minute, "Interval to emit process statistics.")
+	statsInterval    = flag.Duration("sint", 1*time.Minute, "Interval to emit process statistics.")
 	wallclockTimeout = flag.Duration("wallclock", 10*time.Minute, "The time until wallclock timeout of the process.")
 	debugMode        = flag.Bool("debug", false, "Debug logging enable")
 	noWarn           = flag.Bool("nowarn", false, "Disable warnings on stats collection.")
