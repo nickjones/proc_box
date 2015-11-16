@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -26,6 +28,29 @@ var (
 
 func init() {
 	flag.Parse()
+
+	// Create a map of pointers to all the current flags
+	flags := map[string]*flag.Flag{}
+	flag.VisitAll(func(f *flag.Flag) {
+		flags[f.Name] = f
+	})
+
+	// Remove the flags that were set on the command line
+	flag.Visit(func(f *flag.Flag) {
+		delete(flags, f.Name)
+	})
+
+	// Now for the flags that weren't set on the cli,
+	// Look at the env for 'PBOX_<uppercase flag name>'
+	// If it exists, use it to set the corresponding flag.
+	for _, f := range flags {
+		var buffer bytes.Buffer
+		buffer.WriteString("PBOX_")
+		buffer.WriteString(strings.ToUpper(f.Name))
+		if os.Getenv(buffer.String()) != "" {
+			f.Value.Set(os.Getenv(buffer.String()))
+		}
+	}
 }
 
 func main() {
