@@ -25,3 +25,4 @@ _testmain.go
 *.swp
 
 proc_box
+mem_test

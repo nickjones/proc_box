@@ -27,6 +27,8 @@ type Job struct {
 	Cmd  *exec.Cmd
 	Proc *process.Process
 	done chan error
+	Pid  int
+	Pgid int
 }
 
 // NewControlledProcess creates the child proc.
@@ -37,6 +39,8 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 		nil,
 		nil,
 		doneChan,
+		0,
+		0,
 	}
 
 	j.Cmd = exec.Command(cmd)
@@ -63,9 +67,13 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 		return nil, fmt.Errorf("Failed to execute sub-process: %s\n", err)
 	}
 
-	pid := int32(j.Cmd.Process.Pid)
+	j.Pid = j.Cmd.Process.Pid
+	j.Pgid, err = syscall.Getpgid(j.Pid)
+	if err != nil {
+		return nil, fmt.Errorf("Failed syscall.Getpgid: %s\n", err)
+	}
 
-	j.Proc, err = process.NewProcess(pid)
+	j.Proc, err = process.NewProcess(int32(j.Pgid))
 	if err != nil {
 		return nil, fmt.Errorf("Unable to create process.NewProcess: %s\n", err)
 	}
@@ -93,7 +101,7 @@ func stdRedirect(r io.Reader) {
 
 // Stop gracefully ends the process
 func (j *Job) Stop() error {
-	if err := j.Proc.Terminate(); err != nil {
+	if err := syscall.Kill(-j.Pgid, syscall.SIGTERM); err != nil {
 		log.Warnf("Error received calling terminate on sub-process: %s\n", err)
 		return err
 	}
@@ -102,7 +110,7 @@ func (j *Job) Stop() error {
 
 // Resume continues a suspended process
 func (j *Job) Resume() error {
-	if err := j.Proc.Resume(); err != nil {
+	if err := syscall.Kill(-j.Pgid, syscall.SIGCONT); err != nil {
 		log.Warnf("Error received calling resume on sub-process: %s", err)
 		return err
 	}
@@ -111,7 +119,7 @@ func (j *Job) Resume() error {
 
 // Suspend pauses a running process
 func (j *Job) Suspend() error {
-	if err := j.Proc.Suspend(); err != nil {
+	if err := syscall.Kill(-j.Pgid, syscall.SIGSTOP); err != nil {
 		log.Warnf("Error received calling suspend on sub-process: %s", err)
 		return err
 	}
@@ -124,10 +132,10 @@ func (j *Job) Kill(sig int64) error {
 
 	switch sig {
 	case -9:
-		err = j.Proc.Kill()
+		err = syscall.Kill(-j.Pgid, syscall.SIGKILL)
 	default:
 		signal := syscall.Signal(sig)
-		err = j.Proc.SendSignal(signal)
+		err = syscall.Kill(-j.Pgid, signal)
 	}
 
 	if err != nil {
