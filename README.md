@@ -28,5 +28,21 @@ is necessary.
 ./proc_box -uri <amqp_uri> <cmd> <args>
 ```
 
+### Remote Commands
+Remote commands can be issued through the AMQP broker to the topic exchange specified
+(or default proc_box.remote_control).  Messages should be in JSON of the form:
+```
+{
+    "command": "<some command>",
+    "arguments": ["string1", "string2", ...],
+}
+```
+Supported commands:
+* stop: Issue SIGQUIT to the process.
+* suspend: Resume suspended process execution (and timeout timer).
+* resume: Suspend the process execution.
+* kill: Issue SIGKILL to the process.  Optional single argument is the signal to send (9 is default).
+* sample: Force a process statistics sample.
+
 ## License
 proc_box is licensed under the MIT License.
