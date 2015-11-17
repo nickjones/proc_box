@@ -21,7 +21,7 @@ var (
 	rmtKey           = flag.String("rkey", "proc_box.remote_control", "AMQP routing key for remote process control.")
 	procStatsKey     = flag.String("skey", "proc_box.stats", "AMQP routing key prefix for proc stats.")
 	statsInterval    = flag.Duration("sint", 1*time.Minute, "Interval to emit process statistics.")
-	wallclockTimeout = flag.Duration("wallclock", 10*time.Minute, "The time until wallclock timeout of the process.")
+	wallclockTimeout = flag.Duration("timeout", 10*time.Minute, "The time until wallclock timeout of the process.")
 	debugMode        = flag.Bool("debug", false, "Debug logging enable")
 	noWarn           = flag.Bool("nowarn", false, "Disable warnings on stats collection.")
 )
@@ -193,8 +193,12 @@ func monitor(
 			}
 		case timeoutMsg := <-timer.Done():
 			log.Debugf("Timer timeout message: %s\n", timeoutMsg)
-			// This seems to block for some reason. To be DRY I do not want to replicate the case stop above.
-			//rc.Commands <- agents.RemoteControlCommand{"stop", nil}
+			if err := job.Stop(); err != nil {
+				log.Fatalf("Error received while stopping sub-process: %v\n", err)
+				// If there was an error stopping the process, kill the porcess.
+				job.Kill(-9)
+			}
+			done <- err
 		case _ = <-job.Done():
 			log.Debugln("Command exited gracefully; shutting down.")
 			done <- err
