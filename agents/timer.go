@@ -11,6 +11,7 @@ type Timer interface {
 	Start() error
 	Stop() error
 	Resume() error
+	ElapsedTime() (time.Duration, error)
 	Done() chan error
 }
 
@@ -105,6 +106,10 @@ func (timer *WallclockTimer) Stop() error {
 func (timer *WallclockTimer) Resume() error {
 	timer.command <- "resume"
 	return nil
+}
+
+func (timer *WallclockTimer) ElapsedTime() (time.Duration, error) {
+	return timer.elapsedTime, nil
 }
 
 func (timer *WallclockTimer) Done() chan error {

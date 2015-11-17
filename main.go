@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"strconv"
@@ -118,6 +119,10 @@ func main() {
 	go monitor(signals, rc, job, stats, timer, done)
 
 	_ = <-done
+
+	elapsedTime, _ := timer.ElapsedTime()
+	// Print to standard out
+	fmt.Printf("Task elapsed time: %.2f seconds.\n", elapsedTime.Seconds())
 }
 
 func monitor(
