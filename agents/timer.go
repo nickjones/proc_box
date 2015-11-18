@@ -2,19 +2,22 @@ package agents
 
 import (
 	"errors"
-	log "github.com/Sirupsen/logrus"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
 
+// Timer provides access to control the timer behavior as a stopwatch.
 type Timer interface {
-	Reset() error
-	Start() error
-	Stop() error
-	Resume() error
-	ElapsedTime() (time.Duration, error)
-	Done() chan error
+	Reset() error                        // Clear elapsed time
+	Start() error                        // Start counting time from zero
+	Stop() error                         // Pause timer
+	Resume() error                       // Resume previously paused timer
+	ElapsedTime() (time.Duration, error) // Return duration of elapsed time
+	Done() chan error                    // Timer has hit the maximum value
 }
 
+// WallclockTimer provides an internal structure for storing the timer state.
 type WallclockTimer struct {
 	elapsedTime  time.Duration
 	previousTime time.Time
@@ -25,6 +28,8 @@ type WallclockTimer struct {
 	done         chan error
 }
 
+// NewTimer initializes a new WallclockTimer struct and provides an interface
+// to the new struct.
 func NewTimer(timeout time.Duration) (Timer, error) {
 	timer := &WallclockTimer{
 		time.Duration(0),
@@ -88,30 +93,36 @@ func (timer *WallclockTimer) incrementTimer() {
 	}
 }
 
+// Reset clears the duration
 func (timer *WallclockTimer) Reset() error {
 	timer.command <- "reset"
 	return nil
 }
 
+// Start starts the timer from zero
 func (timer *WallclockTimer) Start() error {
 	timer.command <- "start"
 	return nil
 }
 
+// Stop pauses the timer from counting
 func (timer *WallclockTimer) Stop() error {
 	timer.command <- "stop"
 	return nil
 }
 
+// Resume continues a paused timer
 func (timer *WallclockTimer) Resume() error {
 	timer.command <- "resume"
 	return nil
 }
 
+// ElapsedTime provides the duration of elapsed time counted by the timer
 func (timer *WallclockTimer) ElapsedTime() (time.Duration, error) {
 	return timer.elapsedTime, nil
 }
 
+// Done provides the channel used by the tiemr when it has expired
 func (timer *WallclockTimer) Done() chan error {
 	return timer.done
 }

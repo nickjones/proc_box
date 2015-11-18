@@ -14,14 +14,11 @@ import (
 
 // ProcessStats provides an interface for collecting statistics about the pid
 type ProcessStats interface {
-	Sample() error
-	Start() error
-	Stop() error
+	Sample() error // Take a statistical sample and emit it on AMQP
 }
 
 // ProcessStatCollector is a container for internal state
 type ProcessStatCollector struct {
-	ProcessStats
 	connection *amqp.Connection
 	channel    *amqp.Channel
 	routingKey string
@@ -31,14 +28,15 @@ type ProcessStatCollector struct {
 }
 
 // ProcessStatSample contains a single sample of the underlying process system usage.
+// See gopsutil for defintions of these structures and support for particular OSes.
 type ProcessStatSample struct {
-	Host       host.HostInfoStat
-	Memory     process.MemoryInfoStat
-	CPUTimes   cpu.CPUTimesStat
-	IOCounters process.IOCountersStat
-	OpenFiles  []process.OpenFilesStat
-	NumThreads int32
-	Pid        int32
+	Host       host.HostInfoStat       // See gopsutil for description
+	Memory     process.MemoryInfoStat  // See gopsutil for description
+	CPUTimes   cpu.CPUTimesStat        // See gopsutil for description
+	IOCounters process.IOCountersStat  // See gopsutil for description
+	OpenFiles  []process.OpenFilesStat // See gopsutil for description
+	NumThreads int32                   // Number of threads in use by the child processes (if supported)
+	Pid        int32                   // Process ID for the group
 }
 
 // NewProcessStats establishes a new AMQP channel and configures sampling period
@@ -47,7 +45,6 @@ func NewProcessStats(amqp *amqp.Connection, routingKey string,
 
 	var err error
 	psc := &ProcessStatCollector{
-		nil,
 		amqp,
 		nil,
 		routingKey,

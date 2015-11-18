@@ -14,13 +14,13 @@ type RemoteControl struct {
 	channel  *amqp.Channel
 	tag      string
 	done     chan error
-	Commands chan RemoteControlCommand
+	Commands chan RemoteControlCommand // Channel for incoming JSON unmarshalled RemoteControlCommands
 }
 
 // RemoteControlCommand is the unmarshalled JSON remote command to control the process.
 type RemoteControlCommand struct {
-	Command   string
-	Arguments []string
+	Command   string   // Command to execute
+	Arguments []string // Optional arguments
 }
 
 // NewRemoteControl creates a new watcher for external commands through AMQP

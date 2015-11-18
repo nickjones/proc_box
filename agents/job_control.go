@@ -1,3 +1,4 @@
+// Package agents provides individual handlers for managing portions of controlling or observing a contained process.
 package agents
 
 import (
@@ -13,22 +14,21 @@ import (
 
 // JobControl provides a command interface for control
 type JobControl interface {
-	Stop() error
-	Suspend() error
-	Resume() error
-	Kill(int64) error
-	Done() chan error
-	Process() *process.Process
+	Stop() error               // Gracefully end process
+	Suspend() error            // Stop scheduling process to be resumed later
+	Resume() error             // Resume a previously stopped process
+	Kill(int64) error          // Send SIGKILL (or arg os.Signal)
+	Done() chan error          // Reflects the child process is done
+	Process() *process.Process // Handle to gopsutil process struct for stats
 }
 
 // Job contains a handle to the actual process struct.
 type Job struct {
-	JobControl
-	Cmd  *exec.Cmd
-	Proc *process.Process
-	done chan error
-	Pid  int
-	Pgid int
+	Cmd  *exec.Cmd        // Handle to the forked process
+	Proc *process.Process // gopsutil process handle for later stats gathering
+	Pid  int              // Process ID, not particularlly useful
+	Pgid int              // Process Group ID, used for stats/control of the entire tree created
+	done chan error       // Output for normal exiting of the child
 }
 
 // NewControlledProcess creates the child proc.
@@ -37,10 +37,9 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 	j := &Job{
 		nil,
 		nil,
-		nil,
+		0,
+		0,
 		doneChan,
-		0,
-		0,
 	}
 
 	j.Cmd = exec.Command(cmd)
@@ -92,6 +91,7 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error) (
 	return j, nil
 }
 
+// stdRedirect helps keep redirection of child process streams DRY
 func stdRedirect(r io.Reader) {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
