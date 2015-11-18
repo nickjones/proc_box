@@ -21,6 +21,10 @@ naturally existing.
 Go; that's about it.  We suggest the rabbitmq:3-management Docker container for
 development purposes.
 
+## Documentation
+Use [Godoc documentation](https://godoc.org/github.com/nickjones/proc_box) under
+the agents package for reference.
+
 ## Running
 Generally, only specifying both the AMQP broker and the command to be contained
 is necessary.
