@@ -4,10 +4,16 @@ go:
   - 1.4
   - 1.5
 
+before_install:
+  - go get github.com/axw/gocov/gocov
+  - go get github.com/mattn/goveralls
+  - if ! go get github.com/golang/tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
+
 services:
   - rabbitmq
 
 env:
- - AMQP_URI=amqp://guest:guest@127.0.0.1:5672/ GOMAXPROCS=2
+ - AMQP_URI=amqp://guest:guest@127.0.0.1:5672/
 
-script: go test -v -tags integration ./...
+script:
+  - ./coverall.sh
