@@ -21,7 +21,7 @@ done
 # Failures have incomplete results, so don't send
 if [ -n "$COVERALLS" ] && [ "$fail" -eq 0 ]
 then
-  goveralls -v -coverprofile=acc.out -service=travis-ci
+  goveralls -v -coverprofile=acc.out -service=travis-ci -repotoken=$COVERALLS_TOKEN
 fi
 
 rm -f acc.out
