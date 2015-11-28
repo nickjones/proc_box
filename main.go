@@ -193,6 +193,26 @@ func monitor(
 			case "sample":
 				log.Debugln("RemoteCommand: Sample")
 				ps.Sample()
+			case "timer_reset":
+				log.Debugln("RemoteCommand: Timer Reset")
+				if err := timer.Reset(); err != nil {
+					log.Fatalf("Error received from timer calling Reset: %s\n", err)
+				}
+			case "timer_start":
+				log.Debugln("RemoteCommand: Timer Start")
+				if err := timer.Start(); err != nil {
+					log.Fatalf("Error received from timer calling Start: %s\n", err)
+				}
+			case "timer_stop":
+				log.Debugln("RemoteCommand: Timer Stop")
+				if err := timer.Stop(); err != nil {
+					log.Fatalf("Error received from timer calling Stop: %s\n", err)
+				}
+			case "timer_resume":
+				log.Debugln("RemoteCommand: Timer Resume")
+				if err := timer.Resume(); err != nil {
+					log.Fatalf("Error received from timer calling Resume: %s\n", err)
+				}
 			default:
 				log.Debugf("Unknown command: %s\n", cmd)
 			}
