@@ -38,7 +38,8 @@ type ProcessStatSample struct {
 	OpenFiles  []process.OpenFilesStat // See gopsutil for description
 	NumThreads int32                   // Number of threads in use by the child processes (if supported)
 	Pid        int32                   // Process ID for the group
-	ChildPids  []int32
+	ChildPids  []int32                 // Children process IDs
+	CPUPercent float64                 // Sum of parent and children CPU percent usage
 }
 
 // NewProcessStats establishes a new AMQP channel and configures sampling period
@@ -186,6 +187,14 @@ func (p *ProcessStatSample) aggregateStatForProc(proc *process.Process) {
 		log.Warnf("Error encountered collecting thread count stats: %s", err)
 	} else {
 		p.NumThreads += numThreads
+	}
+
+	// Use 0 interval to get difference since the last call
+	cpuPercent, err := proc.CPUPercent(0 * time.Second)
+	if err != nil {
+		log.Warnf("Error encountered collecting CPU percent: %s", err)
+	} else {
+		p.CPUPercent += cpuPercent
 	}
 }
 
