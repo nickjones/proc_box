@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/smartystreets/goconvey/convey"
-	"github.com/streadway/amqp"
+	. "github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/smartystreets/goconvey/convey"
+	"github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/streadway/amqp"
 )
 
 // TestIntegrationDialAMQP tests a connection to an AMQP broker and quits

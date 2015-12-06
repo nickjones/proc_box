@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/streadway/amqp"
 	"github.com/nickjones/proc_box/agents"
-	"github.com/streadway/amqp"
 )
 
 var (

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/streadway/amqp"
+	log "github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/streadway/amqp"
 )
 
 // RemoteControl is a container for the AMQP connection for remote process control

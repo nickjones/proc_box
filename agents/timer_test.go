@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/smartystreets/goconvey/convey"
+	. "github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/smartystreets/goconvey/convey"
 )
 
 func TestTimeout(t *testing.T) {

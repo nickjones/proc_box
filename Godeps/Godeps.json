@@ -1,0 +1,57 @@
+{
+	"ImportPath": "github.com/nickjones/proc_box",
+	"GoVersion": "go1.5.1",
+	"Packages": [
+		"./agents"
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/Sirupsen/logrus",
+			"Comment": "v0.8.7-30-g4643a7e",
+			"Rev": "4643a7efec9b8fd7548882e7b30095711343100f"
+		},
+		{
+			"ImportPath": "github.com/jtolds/gls",
+			"Rev": "9a4a02dbe491bef4bab3c24fd9f3087d6c4c6690"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/cpu",
+			"Comment": "1.0.0-206-g59c2eff",
+			"Rev": "59c2eff5e8b9f10560767a88d140d650cbc1dc8f"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/host",
+			"Comment": "1.0.0-206-g59c2eff",
+			"Rev": "59c2eff5e8b9f10560767a88d140d650cbc1dc8f"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/internal/common",
+			"Comment": "1.0.0-206-g59c2eff",
+			"Rev": "59c2eff5e8b9f10560767a88d140d650cbc1dc8f"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/net",
+			"Comment": "1.0.0-206-g59c2eff",
+			"Rev": "59c2eff5e8b9f10560767a88d140d650cbc1dc8f"
+		},
+		{
+			"ImportPath": "github.com/shirou/gopsutil/process",
+			"Comment": "1.0.0-206-g59c2eff",
+			"Rev": "59c2eff5e8b9f10560767a88d140d650cbc1dc8f"
+		},
+		{
+			"ImportPath": "github.com/smartystreets/assertions",
+			"Comment": "1.5.0-405-g01fedaa",
+			"Rev": "01fedaa993c0a9f9aa55111501cd7c81a49e812e"
+		},
+		{
+			"ImportPath": "github.com/smartystreets/goconvey/convey",
+			"Comment": "1.5.0-449-g530dd3d",
+			"Rev": "530dd3d2cafa09958178e8c557bc4abeea1651a5"
+		},
+		{
+			"ImportPath": "github.com/streadway/amqp",
+			"Rev": "989f76903dbe3b7855b6e57e4048f87d03b5ac95"
+		}
+	]
+}

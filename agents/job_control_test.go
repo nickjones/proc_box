@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shirou/gopsutil/process"
-	. "github.com/smartystreets/goconvey/convey"
+	"github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/shirou/gopsutil/process"
+	. "github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/smartystreets/goconvey/convey"
 )
 
 func TestNewControlledProcess(t *testing.T) {
