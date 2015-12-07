@@ -26,6 +26,7 @@ type ProcessStatCollector struct {
 	exchange   string
 	job        *JobControl
 	ticker     <-chan time.Time
+	hostInfo   *host.HostInfoStat
 }
 
 // ProcessStatSample contains a single sample of the underlying process system usage.
@@ -53,6 +54,7 @@ func NewProcessStats(amqp *amqp.Connection, routingKey string,
 		routingKey,
 		exchange,
 		job,
+		nil,
 		nil,
 	}
 
@@ -83,6 +85,10 @@ func NewProcessStats(amqp *amqp.Connection, routingKey string,
 			}
 		}
 	}(psc)
+
+	// Collect basic host info for conditional sampling of some data
+	// as a workaround for certain platforms.
+	psc.hostInfo, err = host.HostInfo()
 
 	return psc, nil
 }
@@ -147,55 +153,21 @@ func (ps *ProcessStatCollector) Sample() error {
 }
 
 func (p *ProcessStatSample) aggregateStatForProc(proc *process.Process) {
-	meminfo, err := proc.MemoryInfo()
-	if err != nil {
-		log.Warnf("Error encountered collecting memory stats: %s", err)
-	} else {
-		src := reflect.ValueOf(meminfo).Elem()
-		dest := reflect.ValueOf(&p.Memory).Elem()
-		sum(&src, &dest)
-	}
+	// Split individual stat calls into functions for panic recovery
+	// without losing the entire statistic.
 
-	cputimes, err := proc.CPUTimes()
-	if err != nil {
-		log.Warnf("Error encountered collecting CPU stats: %s", err)
-	} else {
-		src := reflect.ValueOf(cputimes).Elem()
-		dest := reflect.ValueOf(&p.CPUTimes).Elem()
-		sum(&src, &dest)
-	}
+	p.collectMemInfo(proc)
 
-	iocnt, err := proc.IOCounters()
-	if err != nil {
-		log.Warnf("Error encountered collecting I/O stats: %s", err)
-	} else {
-		src := reflect.ValueOf(iocnt).Elem()
-		dest := reflect.ValueOf(&p.IOCounters).Elem()
-		sum(&src, &dest)
-	}
+	p.collectCPUTimes(proc)
 
-	openFiles, err := proc.OpenFiles()
-	if err != nil {
-		log.Warnf("Error encountered collecting open files stats: %s", err)
-	} else {
-		p.OpenFiles = append(p.OpenFiles, openFiles...)
-	}
+	p.collectIOCounters(proc)
+
+	p.collectOpenFiles(proc)
 
 	// NOTE: This will end up counting separate pids as "threads"
-	numThreads, err := proc.NumThreads()
-	if err != nil {
-		log.Warnf("Error encountered collecting thread count stats: %s", err)
-	} else {
-		p.NumThreads += numThreads
-	}
+	p.collectNumThreads(proc)
 
-	// Use 0 interval to get difference since the last call
-	cpuPercent, err := proc.CPUPercent(0 * time.Second)
-	if err != nil {
-		log.Warnf("Error encountered collecting CPU percent: %s", err)
-	} else {
-		p.CPUPercent += cpuPercent
-	}
+	p.collectCPUPercent(proc)
 }
 
 func sum(src *reflect.Value, dest *reflect.Value) {
@@ -212,5 +184,96 @@ func sum(src *reflect.Value, dest *reflect.Value) {
 			total += dest.Field(i).Float()
 			dest.Field(i).SetFloat(total)
 		}
+	}
+}
+
+func (p *ProcessStatSample) collectMemInfo(proc *process.Process) {
+	defer func() {
+		if e := recover(); e != nil {
+			log.Warnf("Recovered from panic on memory stats collection. Maybe unsupported on this platform.")
+		}
+	}()
+	meminfo, err := proc.MemoryInfo()
+	if err != nil {
+		log.Warnf("Error encountered collecting memory stats: %s", err)
+	} else {
+		src := reflect.ValueOf(meminfo).Elem()
+		dest := reflect.ValueOf(&p.Memory).Elem()
+		sum(&src, &dest)
+	}
+}
+
+func (p *ProcessStatSample) collectCPUTimes(proc *process.Process) {
+	defer func() {
+		if e := recover(); e != nil {
+			log.Warnf("Recovered from panic on CPU times collection. Maybe unsupported on this platform.")
+		}
+	}()
+	cputimes, err := proc.CPUTimes()
+	if err != nil {
+		log.Warnf("Error encountered collecting CPU stats: %s", err)
+	} else {
+		src := reflect.ValueOf(cputimes).Elem()
+		dest := reflect.ValueOf(&p.CPUTimes).Elem()
+		sum(&src, &dest)
+	}
+}
+
+func (p *ProcessStatSample) collectIOCounters(proc *process.Process) {
+	defer func() {
+		if e := recover(); e != nil {
+			log.Warnf("Recovered from panic on IO counters collection. Maybe unsupported on this platform.")
+		}
+	}()
+	iocnt, err := proc.IOCounters()
+	if err != nil {
+		log.Warnf("Error encountered collecting I/O stats: %s", err)
+	} else {
+		src := reflect.ValueOf(iocnt).Elem()
+		dest := reflect.ValueOf(&p.IOCounters).Elem()
+		sum(&src, &dest)
+	}
+}
+
+func (p *ProcessStatSample) collectOpenFiles(proc *process.Process) {
+	defer func() {
+		if e := recover(); e != nil {
+			log.Warnf("Recovered from panic on Open Files collection. Maybe unsupported on this platform.")
+		}
+	}()
+	openFiles, err := proc.OpenFiles()
+	if err != nil {
+		log.Warnf("Error encountered collecting open files stats: %s", err)
+	} else {
+		p.OpenFiles = append(p.OpenFiles, openFiles...)
+	}
+}
+
+func (p *ProcessStatSample) collectNumThreads(proc *process.Process) {
+	defer func() {
+		if e := recover(); e != nil {
+			log.Warnf("Recovered from panic on Number of Threads collection. Maybe unsupported on this platform.")
+		}
+	}()
+	numThreads, err := proc.NumThreads()
+	if err != nil {
+		log.Warnf("Error encountered collecting thread count stats: %s", err)
+	} else {
+		p.NumThreads += numThreads
+	}
+}
+
+func (p *ProcessStatSample) collectCPUPercent(proc *process.Process) {
+	defer func() {
+		if e := recover(); e != nil {
+			log.Warnf("Recovered from panic on CPU Percent collection. Maybe unsupported on this platform.")
+		}
+	}()
+	// Use 0 interval to get difference since the last call
+	cpuPercent, err := proc.CPUPercent(0 * time.Second)
+	if err != nil {
+		log.Warnf("Error encountered collecting CPU percent: %s", err)
+	} else {
+		p.CPUPercent += cpuPercent
 	}
 }
