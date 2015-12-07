@@ -26,7 +26,6 @@ type ProcessStatCollector struct {
 	exchange   string
 	job        *JobControl
 	ticker     <-chan time.Time
-	hostInfo   *host.HostInfoStat
 }
 
 // ProcessStatSample contains a single sample of the underlying process system usage.
@@ -54,7 +53,6 @@ func NewProcessStats(amqp *amqp.Connection, routingKey string,
 		routingKey,
 		exchange,
 		job,
-		nil,
 		nil,
 	}
 
@@ -85,10 +83,6 @@ func NewProcessStats(amqp *amqp.Connection, routingKey string,
 			}
 		}
 	}(psc)
-
-	// Collect basic host info for conditional sampling of some data
-	// as a workaround for certain platforms.
-	psc.hostInfo, err = host.HostInfo()
 
 	return psc, nil
 }
