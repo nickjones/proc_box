@@ -31,17 +31,18 @@ type ProcessStatCollector struct {
 // ProcessStatSample contains a single sample of the underlying process system usage.
 // See gopsutil for defintions of these structures and support for particular OSes.
 type ProcessStatSample struct {
-	Host       host.HostInfoStat       // See gopsutil for description
-	Memory     process.MemoryInfoStat  // See gopsutil for description
-	CPUTimes   cpu.CPUTimesStat        // See gopsutil for description
-	IOCounters process.IOCountersStat  // See gopsutil for description
-	OpenFiles  []process.OpenFilesStat // See gopsutil for description
-	NumThreads int32                   // Number of threads in use by the child processes (if supported)
-	Pid        int32                   // Process ID for the group
-	ChildPids  []int32                 // Children process IDs
-	CPUPercent float64                 // Sum of parent and children CPU percent usage
-	TimeUTC    time.Time               // Timestamp of collection with location set to UTC
-	TimeUnix   int64                   // Timestamp of collection based on seconds elapsed since the unix epoch.
+	Host        host.HostInfoStat       // See gopsutil for description
+	Memory      process.MemoryInfoStat  // See gopsutil for description
+	CPUTimes    cpu.CPUTimesStat        // See gopsutil for description
+	IOCounters  process.IOCountersStat  // See gopsutil for description
+	OpenFiles   []process.OpenFilesStat // See gopsutil for description
+	NumThreads  int32                   // Number of threads in use by the child processes (if supported)
+	Pid         int32                   // Process ID for the group
+	ChildPids   []int32                 // Children process IDs
+	CPUPercent  float64                 // Sum of parent and children CPU percent usage
+	TimeUTC     time.Time               // Timestamp of collection with location set to UTC
+	TimeUnix    int64                   // Timestamp of collection based on seconds elapsed since the unix epoch.
+	StdoutBytes int64                   // Running total of bytes emitted via STDOUT by the child process
 }
 
 // NewProcessStats establishes a new AMQP channel and configures sampling period
@@ -124,6 +125,8 @@ func (ps *ProcessStatCollector) Sample() error {
 			stat.aggregateStatForProc(cproc)
 		}
 	}
+
+	stat.StdoutBytes = job.StdoutByteCount()
 
 	log.Debugf("Sample: %#v\n", stat)
 

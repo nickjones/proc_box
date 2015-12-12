@@ -23,6 +23,7 @@ var (
 	procStatsKey     = flag.String("skey", "proc_box.stats", "AMQP routing key prefix for proc stats.")
 	statsInterval    = flag.Duration("sint", 1*time.Minute, "Interval to emit process statistics.")
 	wallclockTimeout = flag.Duration("timeout", 10*time.Minute, "The time until wallclock timeout of the process.")
+	stdoutByteLimit  = flag.Int64("stdoutlimit", 100*1024*1024*1024, "Threshold of emitted bytes to STDOUT by the child before calling Stop on the process (default 100GB).")
 	debugMode        = flag.Bool("debug", false, "Debug logging enable")
 	noWarn           = flag.Bool("nowarn", false, "Disable warnings on stats collection.")
 )
@@ -87,7 +88,7 @@ func main() {
 	done := make(chan error)
 
 	// Initialize job
-	job, err := agents.NewControlledProcess(cmd, args, done)
+	job, err := agents.NewControlledProcess(cmd, args, done, *stdoutByteLimit)
 	if err != nil {
 		log.Fatalf("Failed to create a NewControlledProcess: %s\n", err)
 		return
@@ -134,6 +135,14 @@ func monitor(
 	done chan error,
 ) {
 	var err error
+	var logSampling <-chan time.Time
+
+	if *stdoutByteLimit > 0 {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		// Replace the time channel with an actual ticker if this is in use
+		logSampling = ticker.C
+	}
+
 	for {
 		select {
 		// Catch incoming signals and operate on them as if they were remote commands
@@ -143,11 +152,9 @@ func monitor(
 				log.Debugln("Caught SIGINT, graceful shutdown")
 				ps.Sample()
 				err = job.Stop()
-				done <- err
 			case syscall.SIGTERM:
 				log.Debugln("Caught SIGTERM, end abruptly")
 				job.Kill(-9)
-				done <- err
 			case syscall.SIGHUP:
 				log.Debugln("Caught SIGHUP, emit stats")
 				ps.Sample()
@@ -155,7 +162,6 @@ func monitor(
 				log.Debugln("Caught SIGQUIT, graceful shutdown")
 				ps.Sample()
 				err = job.Stop()
-				done <- err
 			}
 		// Process incoming remote commands, toss unknown requests
 		case cmd := <-rc.Commands:
@@ -181,15 +187,12 @@ func monitor(
 					}
 				}
 				job.Kill(args)
-				done <- err
 			case "stop":
-				var err error
 				log.Debugln("RemoteCommand: Stop")
 				ps.Sample()
 				if err := job.Stop(); err != nil {
 					log.Fatalf("Error received while stopping sub-process: %s\n", err)
 				}
-				done <- err
 			case "sample":
 				log.Debugln("RemoteCommand: Sample")
 				ps.Sample()
@@ -223,10 +226,15 @@ func monitor(
 				// If there was an error stopping the process, kill the porcess.
 				job.Kill(-9)
 			}
-			done <- err
 		case _ = <-job.Done():
 			log.Debugln("Command exited gracefully; shutting down.")
 			done <- err
+		case _ = <-logSampling:
+			if job.StdoutByteCount() > 2*(*stdoutByteLimit) {
+				err = job.Kill(-9)
+			} else if job.StdoutByteCount() > *stdoutByteLimit {
+				err = job.Stop()
+			}
 		}
 	}
 }

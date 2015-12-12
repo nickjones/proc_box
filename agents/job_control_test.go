@@ -14,7 +14,7 @@ func TestNewControlledProcess(t *testing.T) {
 		args := []string{}
 		done := make(chan error)
 		Convey("When agents.NewControlledProcess is invoked", func() {
-			jc, err := NewControlledProcess(cmd, args, done)
+			jc, err := NewControlledProcess(cmd, args, done, 0)
 			Convey("The handle should be nil and the err is not nil", func() {
 				So(jc, ShouldBeNil)
 				So(err, ShouldNotBeNil)
@@ -26,12 +26,12 @@ func TestNewControlledProcess(t *testing.T) {
 		args := []string{"sleep", "5"}
 		done := make(chan error)
 		Convey("When agents.NewControlledProcess is invoked", func() {
-			jc, err := NewControlledProcess(cmd, args, done)
+			jc, err := NewControlledProcess(cmd, args, done, 0)
 			Convey("The handle should not be nil and the error is nil", func() {
 				So(jc, ShouldNotBeNil)
 				So(err, ShouldBeNil)
 			})
-			jc, err = NewControlledProcess(cmd, args, done)
+			jc, err = NewControlledProcess(cmd, args, done, 0)
 			Convey("The done channel should get a nil error when the job completes", func() {
 				output := <-done
 				So(output, ShouldBeNil)
@@ -43,7 +43,7 @@ func TestNewControlledProcess(t *testing.T) {
 		cmd := "echo"
 		args := []string{"echo", "Hello testing"}
 		done := make(chan error)
-		_, _ = NewControlledProcess(cmd, args, done)
+		_, _ = NewControlledProcess(cmd, args, done, 0)
 	})
 }
 
@@ -53,7 +53,7 @@ func TestGetDoneChannel(t *testing.T) {
 		args := []string{"sleep", "5"}
 		done := make(chan error)
 		Convey("Calling Done() on the returned JobControl should return the done channel", func() {
-			jc, _ := NewControlledProcess(cmd, args, done)
+			jc, _ := NewControlledProcess(cmd, args, done, 0)
 			So(jc, ShouldNotBeNil)
 			So(done, ShouldEqual, jc.Done())
 		})
@@ -66,7 +66,7 @@ func TestGetProcessHandle(t *testing.T) {
 		args := []string{"sleep", "5"}
 		done := make(chan error)
 		Convey("Process() should return a non-nil handle to the process data", func() {
-			jc, _ := NewControlledProcess(cmd, args, done)
+			jc, _ := NewControlledProcess(cmd, args, done, 0)
 			proc := jc.Process()
 			var testProc *process.Process
 			So(proc, ShouldNotBeNil)
@@ -81,7 +81,7 @@ func TestKillProcess(t *testing.T) {
 		done := make(chan error)
 		Convey("When agents.NewControlledProcess is invoked", func() {
 			timeStart := time.Now()
-			jc, _ := NewControlledProcess(cmd, args, done)
+			jc, _ := NewControlledProcess(cmd, args, done, 0)
 			Convey("Calling Kill should immediately end the process", func() {
 				jc.Kill(-9)
 				timeEnd := time.Now()
@@ -93,7 +93,7 @@ func TestKillProcess(t *testing.T) {
 		cmd := "sleep"
 		args := []string{"sleep", "1"}
 		done := make(chan error)
-		jc, _ := NewControlledProcess(cmd, args, done)
+		jc, _ := NewControlledProcess(cmd, args, done, 0)
 		Convey("Calling Kill after it completes should return an error", func() {
 			time.Sleep(2 * time.Second)
 			err := jc.Kill(15)
@@ -109,7 +109,7 @@ func TestStopProcess(t *testing.T) {
 		done := make(chan error)
 		Convey("When agents.NewControlledProcess is invoked", func() {
 			timeStart := time.Now()
-			jc, _ := NewControlledProcess(cmd, args, done)
+			jc, _ := NewControlledProcess(cmd, args, done, 0)
 			Convey("Calling Stop should end the process", func() {
 				jc.Stop()
 				timeEnd := time.Now()
@@ -121,7 +121,7 @@ func TestStopProcess(t *testing.T) {
 		cmd := "sleep"
 		args := []string{"sleep", "1"}
 		done := make(chan error)
-		jc, _ := NewControlledProcess(cmd, args, done)
+		jc, _ := NewControlledProcess(cmd, args, done, 0)
 		Convey("When Stop() is called after it completes should return an error", func() {
 			time.Sleep(2 * time.Second)
 			err := jc.Stop()
@@ -137,7 +137,7 @@ func TestSuspendProcess(t *testing.T) {
 		done := make(chan error)
 		Convey("Calling Suspend() should pause execution of the process and take longer to finish", func() {
 			timeStart := time.Now()
-			jc, _ := NewControlledProcess(cmd, args, done)
+			jc, _ := NewControlledProcess(cmd, args, done, 0)
 			jc.Suspend()
 			time.Sleep(10 * time.Second)
 			jc.Resume()
@@ -146,7 +146,7 @@ func TestSuspendProcess(t *testing.T) {
 			So(timeEnd.Unix()-timeStart.Unix(), ShouldBeGreaterThan, 10)
 		})
 		Convey("Calling Suspend() after the process has ended should return an error", func() {
-			jc, _ := NewControlledProcess(cmd, args, done)
+			jc, _ := NewControlledProcess(cmd, args, done, 0)
 			_ = <-done
 			err := jc.Suspend()
 			So(err, ShouldNotBeNil)
@@ -159,7 +159,7 @@ func TestResumeDeadProcess(t *testing.T) {
 		cmd := "sleep"
 		args := []string{"sleep", "1"}
 		done := make(chan error)
-		jc, _ := NewControlledProcess(cmd, args, done)
+		jc, _ := NewControlledProcess(cmd, args, done, 0)
 		_ = <-done
 		err := jc.Resume()
 		So(err, ShouldNotBeNil)

@@ -50,7 +50,7 @@ func timerTicker(timer *WallclockTimer) {
 		select {
 		case command := <-timer.command:
 			log.Debugln("Command tick at: ", t)
-			log.Debugln("Command received: %s\n", command)
+			log.Debugf("Command received: %s\n", command)
 			switch command {
 			case "reset":
 				log.Debugln("Received a Reset")
