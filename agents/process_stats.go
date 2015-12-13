@@ -40,6 +40,8 @@ type ProcessStatSample struct {
 	Pid        int32                   // Process ID for the group
 	ChildPids  []int32                 // Children process IDs
 	CPUPercent float64                 // Sum of parent and children CPU percent usage
+	TimeUTC    time.Time               // Timestamp of collection with location set to UTC
+	TimeUnix   int64                   // Timestamp of collection based on seconds elapsed since the unix epoch.
 }
 
 // NewProcessStats establishes a new AMQP channel and configures sampling period
@@ -96,6 +98,10 @@ func (ps *ProcessStatCollector) Sample() error {
 	stat := ProcessStatSample{}
 
 	stat.Pid = proc.Pid
+
+	curTime := time.Now()
+	stat.TimeUTC = curTime.UTC()
+	stat.TimeUnix = curTime.Unix()
 
 	hostinfo, err := host.HostInfo()
 	var hostnameRoutingKey string
