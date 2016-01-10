@@ -50,9 +50,12 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error, s
 		nil,
 	}
 
-	j.Cmd = exec.Command(cmd)
-	j.Cmd.Stdin = os.Stdin
-	j.Cmd.Stderr = os.Stderr
+	// Drop command from cmdline arguments and pass the rest as arguments separately
+	var args []string
+	if len(arguments) > 0 {
+		args = arguments[1:]
+	}
+	j.Cmd = exec.Command(cmd, args...)
 
 	// Collect stdout from the process to redirect to real stdout
 	stdoutpipe, err := j.Cmd.StdoutPipe()
@@ -64,21 +67,20 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error, s
 
 	var wg sync.WaitGroup
 
-	// stdin, err := j.Cmd.StdinPipe()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Failed to acquire stdin: %s", err)
-	// }
+	stdin, err := j.Cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to acquire stdin: %s", err)
+	}
 
-	// stderr, err := j.Cmd.StderrPipe()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Failed to acquire stderr: %s", err)
-	// }
+	stderr, err := j.Cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to acquire stderr: %s", err)
+	}
 
 	// Map all child processes under this tree so Kill really ends everything.
 	j.Cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true, // Set process group ID
 	}
-	j.Cmd.Args = arguments
 
 	log.Debugf("%#v\n", j.Cmd)
 
@@ -107,18 +109,16 @@ func NewControlledProcess(cmd string, arguments []string, doneChan chan error, s
 		log.Debugln("child closed stdout")
 	}(&wg, stdout)
 
-	// go func(w io.WriteCloser) {
-	// 	in := bufio.NewReader(os.Stdin)
-	// 	io.WriteString(w, "hello world\n")
-	// 	io.Copy(w, in)
-	// }(stdin)
+	go func(w io.WriteCloser) {
+		io.Copy(w, os.Stdin)
+	}(stdin)
 
-	// wg.Add(1)
-	// go func(wg *sync.WaitGroup, r io.Reader) {
-	// 	defer wg.Done()
-	// 	io.Copy(os.Stderr, r)
-	// 	log.Debugln("child closed stderr")
-	// }(&wg, stderr)
+	wg.Add(1)
+	go func(wg *sync.WaitGroup, r io.Reader) {
+		defer wg.Done()
+		io.Copy(os.Stderr, r)
+		log.Debugln("child closed stderr")
+	}(&wg, stderr)
 
 	// Background waiting for the job to finish and emit a done channel message
 	// when complete.
