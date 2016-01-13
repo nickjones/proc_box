@@ -16,6 +16,7 @@ import (
 // ProcessStats provides an interface for collecting statistics about the pid
 type ProcessStats interface {
 	Sample() error // Take a statistical sample and emit it on AMQP
+	NewTicker(time.Duration)
 }
 
 // ProcessStatCollector is a container for internal state
@@ -76,16 +77,7 @@ func NewProcessStats(amqp *amqp.Connection, routingKey string,
 		return nil, fmt.Errorf("Unable to declare the exchange: %s", err)
 	}
 
-	psc.ticker = time.NewTicker(interval).C
-
-	go func(psc *ProcessStatCollector) {
-		for {
-			select {
-			case _ = <-psc.ticker:
-				psc.Sample()
-			}
-		}
-	}(psc)
+	psc.NewTicker(interval)
 
 	return psc, nil
 }
@@ -153,6 +145,21 @@ func (ps *ProcessStatCollector) Sample() error {
 	}
 
 	return err
+}
+
+// NewTicker creates a new time.Ticker instance with the passed in duration
+// Used to dynamically change the sampling interval
+func (ps *ProcessStatCollector) NewTicker(d time.Duration) {
+	ps.ticker = time.NewTicker(d).C
+	// Construct a new goroutine to handle ticking since the prior channel closed
+	go func(psc *ProcessStatCollector) {
+		for {
+			select {
+			case _ = <-psc.ticker:
+				psc.Sample()
+			}
+		}
+	}(ps)
 }
 
 func (p *ProcessStatSample) aggregateStatForProc(proc *process.Process) {

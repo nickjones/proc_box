@@ -196,6 +196,19 @@ func monitor(
 			case "sample":
 				log.Debugln("RemoteCommand: Sample")
 				ps.Sample()
+			case "change_sample_rate":
+				log.Debugln("RemoteCommand: Change Stats Sample Rate")
+				if len(cmd.Arguments) > 0 {
+					log.Debugf("change_sample_rate arg[0]: %s\n", cmd.Arguments[0])
+					d, err := time.ParseDuration(cmd.Arguments[0])
+					if err == nil {
+						ps.NewTicker(d)
+					} else {
+						log.Warnf("Unparseable duration argument to command change_sample_rate")
+					}
+				} else {
+					log.Warnf("Missing argument to command change_sample_rate")
+				}
 			case "timer_reset":
 				log.Debugln("RemoteCommand: Timer Reset")
 				if err := timer.Reset(); err != nil {

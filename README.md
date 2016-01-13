@@ -59,6 +59,7 @@ Supported commands:
 * **suspend**: Suspend the process execution.
 * **kill**: Issue SIGKILL to the process.  Optional single argument is the signal to send (9 is default).
 * **sample**: Force a process statistics sample.
+* **change_sample_rate**: Change duration between process statistic samples.
 * **timer_reset**: Disables timer and sets ElapsedTime to zero.
 * **timer_start**: Enables timer ticking from an ElapsedTime of zero.
 * **timer_stop**: Disables timer
