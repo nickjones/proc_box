@@ -66,6 +66,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to AMQP: %s\n", err)
 	}
+	defer amqpConn.Close()
 
 	// Establish remote control channel prior to execution
 	rc, err := agents.NewRemoteControl(amqpConn, *rmtKey, *exchange)
