@@ -63,7 +63,16 @@ func main() {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	amqpConn, err := amqp.Dial(*uri)
+	amqpConn, err := amqp.DialConfig(
+		*uri,
+		amqp.Config{
+			Properties: amqp.Table{
+				"product": "proc_box",
+				"version": "master",
+			},
+		},
+	)
+
 	if err != nil {
 		if !*runAnyway {
 			log.Fatalf("Failed to connect to AMQP: %s\n", err)
