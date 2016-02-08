@@ -26,6 +26,7 @@ var (
 	stdoutByteLimit  = flag.Int64("stdoutlimit", 100*1024*1024*1024, "Threshold of emitted bytes to STDOUT by the child before calling Stop on the process (default 100GB).")
 	debugMode        = flag.Bool("debug", false, "Debug logging enable")
 	noWarn           = flag.Bool("nowarn", false, "Disable warnings on stats collection.")
+	runAnyway        = flag.Bool("runanyway", false, "Ignore all AMQP errors (connection, message generation, etc.).")
 )
 
 func init() {
@@ -64,13 +65,17 @@ func main() {
 
 	amqpConn, err := amqp.Dial(*uri)
 	if err != nil {
-		log.Fatalf("Failed to connect to AMQP: %s\n", err)
+		if !*runAnyway {
+			log.Fatalf("Failed to connect to AMQP: %s\n", err)
+		}
+	} else {
+		defer amqpConn.Close()
 	}
-	defer amqpConn.Close()
 
 	// Establish remote control channel prior to execution
 	rc, err := agents.NewRemoteControl(amqpConn, *rmtKey, *exchange)
-	if err != nil {
+	// Connect may have worked but failed to build channels, queues, etc.
+	if err != nil && !*runAnyway {
 		log.Fatalf("NewRemoteControl failed: %s\n", err)
 	}
 
@@ -106,6 +111,9 @@ func main() {
 		&job,
 		*statsInterval,
 	)
+	if err != nil && !*runAnyway {
+		log.Fatalf("Failed to initialize NewProcessStats: %s\n", err)
+	}
 
 	log.Debugf("%#v\n", stats)
 
@@ -135,8 +143,26 @@ func monitor(
 	timer agents.Timer,
 	done chan error,
 ) {
+
+	// Catch any panics here to ensure we kill the child process before going
+	// to our own doom.
+	defer func() {
+		if e := recover(); e != nil {
+			job.Kill(-9)
+			panic(e)
+		}
+	}()
 	var err error
 	var logSampling <-chan time.Time
+	var rcChan <-chan agents.RemoteControlCommand
+
+	// Cover case of failed AMQP connection but still need a command channel
+	// to use in the select
+	if rc != nil {
+		rcChan = rc.Commands
+	} else {
+		rcChan = nil
+	}
 
 	if *stdoutByteLimit > 0 {
 		ticker := time.NewTicker(100 * time.Millisecond)
@@ -151,21 +177,27 @@ func monitor(
 			switch sig {
 			case syscall.SIGINT:
 				log.Debugln("Caught SIGINT, graceful shutdown")
-				ps.Sample()
+				if ps != nil {
+					ps.Sample()
+				}
 				err = job.Stop()
 			case syscall.SIGTERM:
 				log.Debugln("Caught SIGTERM, end abruptly")
 				job.Kill(-9)
 			case syscall.SIGHUP:
 				log.Debugln("Caught SIGHUP, emit stats")
-				ps.Sample()
+				if ps != nil {
+					ps.Sample()
+				}
 			case syscall.SIGQUIT:
 				log.Debugln("Caught SIGQUIT, graceful shutdown")
-				ps.Sample()
+				if ps != nil {
+					ps.Sample()
+				}
 				err = job.Stop()
 			}
 		// Process incoming remote commands, toss unknown requests
-		case cmd := <-rc.Commands:
+		case cmd := <-rcChan:
 			log.Debugf("Got a command %#v\n", cmd)
 			switch cmd.Command {
 			case "suspend":
@@ -190,13 +222,17 @@ func monitor(
 				job.Kill(args)
 			case "stop":
 				log.Debugln("RemoteCommand: Stop")
-				ps.Sample()
+				if ps != nil {
+					ps.Sample()
+				}
 				if err := job.Stop(); err != nil {
 					log.Fatalf("Error received while stopping sub-process: %s\n", err)
 				}
 			case "sample":
 				log.Debugln("RemoteCommand: Sample")
-				ps.Sample()
+				if ps != nil {
+					ps.Sample()
+				}
 			case "change_sample_rate":
 				log.Debugln("RemoteCommand: Change Stats Sample Rate")
 				if len(cmd.Arguments) > 0 {

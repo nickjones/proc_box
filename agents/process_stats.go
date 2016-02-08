@@ -50,6 +50,10 @@ type ProcessStatSample struct {
 func NewProcessStats(amqp *amqp.Connection, routingKey string,
 	exchange string, job *JobControl, interval time.Duration) (ProcessStats, error) {
 
+	if amqp == nil {
+		return nil, fmt.Errorf("nil amqp.Connection argument")
+	}
+
 	var err error
 	psc := &ProcessStatCollector{
 		amqp,
