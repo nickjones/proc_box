@@ -27,6 +27,7 @@ var (
 	debugMode        = flag.Bool("debug", false, "Debug logging enable")
 	noWarn           = flag.Bool("nowarn", false, "Disable warnings on stats collection.")
 	runAnyway        = flag.Bool("runanyway", false, "Ignore all AMQP errors (connection, message generation, etc.).")
+	msgTimeout       = flag.Duration("msgtimeout", 30*time.Second, "The time allowed for a statistics mesage to be sent before giving up. (0 means never)")
 )
 
 func init() {
@@ -119,6 +120,7 @@ func main() {
 		*exchange,
 		&job,
 		*statsInterval,
+		*msgTimeout,
 	)
 	if err != nil && !*runAnyway {
 		log.Fatalf("Failed to initialize NewProcessStats: %s\n", err)

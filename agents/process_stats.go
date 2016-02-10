@@ -27,6 +27,7 @@ type ProcessStatCollector struct {
 	exchange   string
 	job        *JobControl
 	ticker     <-chan time.Time
+	msgTimeout time.Duration
 }
 
 // ProcessStatSample contains a single sample of the underlying process system usage.
@@ -47,8 +48,14 @@ type ProcessStatSample struct {
 }
 
 // NewProcessStats establishes a new AMQP channel and configures sampling period
-func NewProcessStats(amqp *amqp.Connection, routingKey string,
-	exchange string, job *JobControl, interval time.Duration) (ProcessStats, error) {
+func NewProcessStats(
+	amqp *amqp.Connection,
+	routingKey string,
+	exchange string,
+	job *JobControl,
+	interval time.Duration,
+	msgTimeout time.Duration,
+) (ProcessStats, error) {
 
 	if amqp == nil {
 		return nil, fmt.Errorf("nil amqp.Connection argument")
@@ -62,6 +69,7 @@ func NewProcessStats(amqp *amqp.Connection, routingKey string,
 		exchange,
 		job,
 		nil,
+		msgTimeout,
 	}
 
 	psc.channel, err = psc.connection.Channel()
@@ -88,6 +96,29 @@ func NewProcessStats(amqp *amqp.Connection, routingKey string,
 
 // Sample collects process statistcs and emits them.
 func (ps *ProcessStatCollector) Sample() error {
+	// Start a race between the timeout (if applicable) and the message
+	// collection.
+
+	done := make(chan error, 1)
+	go func() {
+		done <- ps.collectSample()
+	}()
+
+	var timerDone <-chan time.Time
+	if ps.msgTimeout > 0*time.Second {
+		timerDone = time.After(ps.msgTimeout)
+	}
+
+	select {
+	case err := <-done:
+		return err
+	case <-timerDone:
+		log.Warnln("Sample collection exceeded timeout")
+		return fmt.Errorf("Sample collection exceeded timeout")
+	}
+}
+
+func (ps *ProcessStatCollector) collectSample() error {
 	var err error
 	job := *ps.job
 	proc := job.Process()
