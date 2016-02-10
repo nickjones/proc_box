@@ -11,6 +11,14 @@
 			"Rev": "4643a7efec9b8fd7548882e7b30095711343100f"
 		},
 		{
+			"ImportPath": "github.com/aybabtme/iocontrol",
+			"Rev": "ad15bcfc95a08d0b9d072012fb7618512aafb99b"
+		},
+		{
+			"ImportPath": "github.com/benbjohnson/clock",
+			"Rev": "ae77645379a07929edeef20b47ba761ecfe5fde8"
+		},
+		{
 			"ImportPath": "github.com/jtolds/gls",
 			"Rev": "9a4a02dbe491bef4bab3c24fd9f3087d6c4c6690"
 		},
