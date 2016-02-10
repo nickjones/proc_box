@@ -9,8 +9,8 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/aybabtme/iocontrol"
 	log "github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/Sirupsen/logrus"
+	"github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/aybabtme/iocontrol"
 	"github.com/nickjones/proc_box/Godeps/_workspace/src/github.com/shirou/gopsutil/process"
 )
 
