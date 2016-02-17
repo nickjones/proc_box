@@ -28,6 +28,7 @@ type ProcessStatCollector struct {
 	job        *JobControl
 	ticker     <-chan time.Time
 	msgTimeout time.Duration
+	userJSON   map[string]interface{}
 }
 
 // ProcessStatSample contains a single sample of the underlying process system usage.
@@ -45,6 +46,7 @@ type ProcessStatSample struct {
 	TimeUTC     time.Time               // Timestamp of collection with location set to UTC
 	TimeUnix    int64                   // Timestamp of collection based on seconds elapsed since the unix epoch.
 	StdoutBytes int64                   // Running total of bytes emitted via STDOUT by the child process
+	UserData    map[string]interface{}  // User provided JSON from invocation (not validated in proc_box!)
 }
 
 // NewProcessStats establishes a new AMQP channel and configures sampling period
@@ -55,6 +57,7 @@ func NewProcessStats(
 	job *JobControl,
 	interval time.Duration,
 	msgTimeout time.Duration,
+	userJSON string,
 ) (ProcessStats, error) {
 
 	if amqp == nil {
@@ -62,6 +65,15 @@ func NewProcessStats(
 	}
 
 	var err error
+	var extraJSON map[string]interface{}
+
+	if len(userJSON) > 0 {
+		err = json.Unmarshal([]byte(userJSON), &extraJSON)
+		if err != nil {
+			log.Warnf("Error encountered trying to unmarshal user provided JSON: %s\n", err)
+		}
+	}
+
 	psc := &ProcessStatCollector{
 		amqp,
 		nil,
@@ -70,6 +82,7 @@ func NewProcessStats(
 		job,
 		nil,
 		msgTimeout,
+		extraJSON,
 	}
 
 	psc.channel, err = psc.connection.Channel()
@@ -154,6 +167,8 @@ func (ps *ProcessStatCollector) collectSample() error {
 	}
 
 	stat.StdoutBytes = job.StdoutByteCount()
+
+	stat.UserData = ps.userJSON
 
 	log.Debugf("Sample: %#v\n", stat)
 
