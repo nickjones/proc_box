@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>Proc box by nickjones</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">Proc box</h1>
+      <h2 class="project-tagline">Containerize a sub-process for monitoring and remote control via AMQP</h2>
+      <a href="https://github.com/nickjones/proc_box" class="btn">View on GitHub</a>
+      <a href="https://github.com/nickjones/proc_box/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/nickjones/proc_box/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <h1>
+<a id="batch-user-workload-monitoring" class="anchor" href="#batch-user-workload-monitoring" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Batch User Workload Monitoring</h1>
+
+<p>proc_box is an open source, way of containerizing a process into a resource
+monitored box suitable for batch systems.  The primary goal is to limit resource
+explosion and causing other users of the batch system to receive unexpected
+resource pressure.  This project also provides remote control of the process
+through AMQP JSON messages.  Resource usage measurements of the contained
+process are emitted for analysis or control by other tools.</p>
+
+<h2>
+<a id="features" class="anchor" href="#features" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Features</h2>
+
+<ul>
+<li>Connects to an AMQP broker</li>
+<li>Starts the contained process</li>
+<li>Gracefully exits with either a simple remote control JSON or the process
+naturally existing.</li>
+<li>Basic suspend/resume/quit/kill remote control support.</li>
+<li>Controllable wall-clock timer to end runaway processes
+(also controlled over AMQP).</li>
+<li>Captures SIGINT/etc. at proc_box level and issues appropriate signals to child
+process.</li>
+<li>Periodic statistical samples of process usage (aggregated parent and children)
+emitted on AMQP.</li>
+<li>Arguments directly on the command line or provided through environment variables.
+Command line overrides environment variables.</li>
+</ul>
+
+<h2>
+<a id="requirements" class="anchor" href="#requirements" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Requirements</h2>
+
+<p>Go; that's about it.  We suggest the rabbitmq:3-management Docker container for
+development purposes.</p>
+
+<h2>
+<a id="documentation" class="anchor" href="#documentation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Documentation</h2>
+
+<p>Use <a href="https://godoc.org/github.com/nickjones/proc_box/agents">Godoc documentation</a> under
+the agents package for reference.</p>
+
+<h2>
+<a id="running" class="anchor" href="#running" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Running</h2>
+
+<p>Generally, only specifying both the AMQP broker and the command to be contained
+is necessary.</p>
+
+<pre><code>./proc_box -uri &lt;amqp_uri&gt; &lt;cmd&gt; &lt;args&gt;
+</code></pre>
+
+<h3>
+<a id="remote-commands" class="anchor" href="#remote-commands" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Remote Commands</h3>
+
+<p>Remote commands can be issued through the AMQP broker to the topic exchange specified
+(or default proc_box.remote_control).  Messages should be in JSON of the form:</p>
+
+<pre><code>{
+    "command": "&lt;cmd&gt;",
+    "arguments": ["&lt;arg1&gt;", "&lt;arg2&gt;", ...],
+}
+</code></pre>
+
+<p>Supported commands:</p>
+
+<ul>
+<li>
+<strong>stop</strong>: Issue SIGQUIT to the process.</li>
+<li>
+<strong>resume</strong>: Resume suspended process execution (and timeout timer).</li>
+<li>
+<strong>suspend</strong>: Suspend the process execution.</li>
+<li>
+<strong>kill</strong>: Issue SIGKILL to the process.  Optional single argument is the signal to send (9 is default).</li>
+<li>
+<strong>sample</strong>: Force a process statistics sample.</li>
+<li>
+<strong>change_sample_rate</strong>: Change duration between process statistic samples.</li>
+<li>
+<strong>timer_reset</strong>: Disables timer and sets ElapsedTime to zero.</li>
+<li>
+<strong>timer_start</strong>: Enables timer ticking from an ElapsedTime of zero.</li>
+<li>
+<strong>timer_stop</strong>: Disables timer</li>
+<li>
+<strong>timer_resume</strong>: Continues ticking time without resetting.</li>
+</ul>
+
+<h2>
+<a id="license" class="anchor" href="#license" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>License</h2>
+
+<p>proc_box is licensed under the MIT License.</p>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/nickjones/proc_box">Proc box</a> is maintained by <a href="https://github.com/nickjones">nickjones</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
