@@ -17,6 +17,7 @@ import (
 type ProcessStats interface {
 	Sample() error // Take a statistical sample and emit it on AMQP
 	NewTicker(time.Duration)
+	ReinitializeConnection(*amqp.Connection) error
 }
 
 // ProcessStatCollector is a container for internal state
@@ -49,6 +50,13 @@ type ProcessStatSample struct {
 	UserData    map[string]interface{}  // User provided JSON from invocation (not validated in proc_box!)
 }
 
+// ProcessStatCommand is used to communicate sample commands and ticker updates
+// with a channel implementation to the ProcessStats agent.
+type ProcessStatCommand struct {
+	TimeUpdate bool
+	NewTime    time.Duration
+}
+
 // NewProcessStats establishes a new AMQP channel and configures sampling period
 func NewProcessStats(
 	amqp *amqp.Connection,
@@ -59,10 +67,6 @@ func NewProcessStats(
 	msgTimeout time.Duration,
 	userJSON string,
 ) (ProcessStats, error) {
-
-	if amqp == nil {
-		return nil, fmt.Errorf("nil amqp.Connection argument")
-	}
 
 	var err error
 	var extraJSON map[string]interface{}
@@ -85,26 +89,42 @@ func NewProcessStats(
 		extraJSON,
 	}
 
-	psc.channel, err = psc.connection.Channel()
+	err = psc.ReinitializeConnection(amqp)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to open a channel on AMQP connection: %s\n", err)
-	}
-
-	if err = psc.channel.ExchangeDeclare(
-		exchange, // name
-		"topic",  // type
-		true,     // durable
-		false,    // auto-deleted
-		false,    // internal
-		false,    // nowait
-		nil,      // arguments
-	); err != nil {
-		return nil, fmt.Errorf("Unable to declare the exchange: %s", err)
 	}
 
 	psc.NewTicker(interval)
 
 	return psc, nil
+}
+
+// ReinitializeConnection reconnects to the AMQP exchange
+func (ps *ProcessStatCollector) ReinitializeConnection(newConn *amqp.Connection) error {
+	var err error
+
+	if newConn == nil {
+		return fmt.Errorf("nil amqp.Connection argument")
+	}
+
+	ps.connection = newConn
+	ps.channel, err = ps.connection.Channel()
+	if err != nil {
+		return fmt.Errorf("Unable to open a channel on AMQP connection: %s\n", err)
+	}
+
+	if err = ps.channel.ExchangeDeclare(
+		ps.exchange, // name
+		"topic",     // type
+		true,        // durable
+		false,       // auto-deleted
+		false,       // internal
+		false,       // nowait
+		nil,         // arguments
+	); err != nil {
+		return fmt.Errorf("Unable to declare the exchange: %s", err)
+	}
+	return nil
 }
 
 // Sample collects process statistcs and emits them.

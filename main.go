@@ -26,10 +26,22 @@ var (
 	stdoutByteLimit  = flag.Int64("stdoutlimit", 100*1024*1024*1024, "Threshold of emitted bytes to STDOUT by the child before calling Stop on the process (default 100GB).")
 	debugMode        = flag.Bool("debug", false, "Debug logging enable")
 	noWarn           = flag.Bool("nowarn", false, "Disable warnings on stats collection.")
-	runAnyway        = flag.Bool("runanyway", false, "Ignore all AMQP errors (connection, message generation, etc.).")
-	msgTimeout       = flag.Duration("msgtimeout", 30*time.Second, "The time allowed for a statistics mesage to be sent before giving up. (0 means never)")
-	userJSON         = flag.String("json", "", "User provided JSON to include in the statistic sample.")
+	// Deprecated but left for backwards compatability for now.  Assumed this is
+	// enabled by default.
+	runAnyway  = flag.Bool("runanyway", false, "Ignore all AMQP errors (connection, message generation, etc.).")
+	msgTimeout = flag.Duration("msgtimeout", 30*time.Second, "The time allowed for a statistics mesage to be sent before giving up. (0 means never)")
+	userJSON   = flag.String("json", "", "User provided JSON to include in the statistic sample.")
 )
+
+type session struct {
+	amqpConn     *amqp.Connection
+	job          agents.JobControl
+	exchange     string
+	rcRoutingKey string
+	psChan       chan agents.ProcessStatCommand
+	rcChan       chan chan agents.RemoteControlCommand
+	amqpConfig   amqp.Config
+}
 
 func init() {
 	flag.Parse()
@@ -65,30 +77,10 @@ func main() {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	amqpConn, err := amqp.DialConfig(
-		*uri,
-		amqp.Config{
-			Properties: amqp.Table{
-				"product": "proc_box",
-				"version": "master",
-			},
-		},
-	)
-
-	if err != nil {
-		if !*runAnyway {
-			log.Fatalf("Failed to connect to AMQP: %s\n", err)
-		}
-	} else {
-		defer amqpConn.Close()
-	}
-
-	// Establish remote control channel prior to execution
-	rc, err := agents.NewRemoteControl(amqpConn, *rmtKey, *exchange)
-	// Connect may have worked but failed to build channels, queues, etc.
-	if err != nil && !*runAnyway {
-		log.Fatalf("NewRemoteControl failed: %s\n", err)
-	}
+	// Create channel for ProcessStats to trigger a sample
+	psChan := make(chan agents.ProcessStatCommand)
+	// Incoming remote command channel (new with each reconnect)
+	rcChan := make(chan chan agents.RemoteControlCommand)
 
 	args := flag.Args()
 	var cmdArgs []string
@@ -111,25 +103,6 @@ func main() {
 		return
 	}
 
-	// Establish process statistics gathering agent
-	// Agent will need to initially wait for the process to start, but should
-	// establish an AMQP channel for message generation prior to the process
-	// starting.
-	stats, err := agents.NewProcessStats(
-		amqpConn,
-		*procStatsKey,
-		*exchange,
-		&job,
-		*statsInterval,
-		*msgTimeout,
-		*userJSON,
-	)
-	if err != nil && !*runAnyway {
-		log.Fatalf("Failed to initialize NewProcessStats: %s\n", err)
-	}
-
-	log.Debugf("%#v\n", stats)
-
 	log.Debugf("%#v\n", job)
 
 	signals := make(chan os.Signal, 1)
@@ -139,7 +112,22 @@ func main() {
 	log.Debugf("Starting timer with timeout of: %v\n", *wallclockTimeout)
 	timer.Start()
 
-	go monitor(signals, rc, job, stats, timer, done)
+	sess := session{
+		job:          job,
+		exchange:     *exchange,
+		rcRoutingKey: *rmtKey,
+		psChan:       psChan,
+		rcChan:       rcChan,
+		amqpConfig: amqp.Config{
+			Properties: amqp.Table{
+				"product": "proc_box",
+				"version": "master",
+			},
+		},
+	}
+	go redial(sess)
+
+	go monitor(signals, rcChan, job, psChan, timer, done)
 
 	_ = <-done
 
@@ -148,11 +136,72 @@ func main() {
 	fmt.Printf("Task elapsed time: %.2f seconds.\n", elapsedTime.Seconds())
 }
 
+func redial(sess session) {
+	var err error
+	var stats agents.ProcessStats
+	var rc *agents.RemoteControl
+
+	// Initialize mini-router for incoming stats agent requests
+	go func() {
+		for s := range sess.psChan {
+			if stats == nil {
+				log.Warnln("No stats agents available (yet), dropping request")
+			} else if s.TimeUpdate {
+				stats.NewTicker(s.NewTime)
+			} else {
+				stats.Sample()
+			}
+		}
+	}()
+
+	for {
+		sess.amqpConn, err = amqp.DialConfig(*uri, sess.amqpConfig)
+
+		if err != nil {
+			log.Warnf("Failed to connect to AMQP: %q", err)
+		} else {
+			rc, err = agents.NewRemoteControl(sess.amqpConn, *rmtKey, *exchange)
+			if err != nil {
+				log.Warnf("Failed creating NewRemoteControl: %s", err)
+			} else {
+				sess.rcChan <- rc.Commands
+			}
+
+			if stats == nil {
+				// initial setup
+				stats, err = agents.NewProcessStats(
+					sess.amqpConn,
+					*procStatsKey,
+					*exchange,
+					&sess.job,
+					*statsInterval,
+					*msgTimeout,
+					*userJSON,
+				)
+				if err != nil {
+					log.Warnf("Failed creating NewProcessStats: %s", err)
+				}
+			} else {
+				err = stats.ReinitializeConnection(sess.amqpConn)
+				if err != nil {
+					log.Warnf("Failed to reinitialize process stats: %s", err)
+				}
+			}
+		}
+
+		closings := sess.amqpConn.NotifyClose(make(chan *amqp.Error))
+
+		// Wait for close notification and loop back around to reconnect
+		_ = <-closings
+		log.Debugln("Saw a notification for closed connection, looping")
+	}
+}
+
 func monitor(
 	signals chan os.Signal,
-	rc *agents.RemoteControl,
+	rcChanChan chan chan agents.RemoteControlCommand,
 	job agents.JobControl,
-	ps agents.ProcessStats,
+	psChan chan agents.ProcessStatCommand,
 	timer agents.Timer,
 	done chan error,
 ) {
@@ -167,15 +216,6 @@ func monitor(
 	}()
 	var err error
 	var logSampling <-chan time.Time
-	var rcChan <-chan agents.RemoteControlCommand
-
-	// Cover case of failed AMQP connection but still need a command channel
-	// to use in the select
-	if rc != nil {
-		rcChan = rc.Commands
-	} else {
-		rcChan = nil
-	}
 
 	if *stdoutByteLimit > 0 {
 		ticker := time.NewTicker(100 * time.Millisecond)
@@ -183,15 +223,22 @@ func monitor(
 		logSampling = ticker.C
 	}
 
+	var rcChan chan agents.RemoteControlCommand
+
 	for {
 		select {
+		case rcChan = <-rcChanChan:
 		// Catch incoming signals and operate on them as if they were remote commands
 		case sig := <-signals:
 			switch sig {
 			case syscall.SIGINT:
 				log.Debugln("Caught SIGINT, graceful shutdown")
-				if ps != nil {
-					ps.Sample()
+				// Initiate non-blocking send
+				select {
+				case psChan <- agents.ProcessStatCommand{}:
+					log.Debugln("Sending psChan a msg to sample")
+				default:
+					log.Debugln("SIGINT failed to send a sample msg on the psChan")
 				}
 				err = job.Stop()
 			case syscall.SIGTERM:
@@ -199,13 +246,20 @@ func monitor(
 				job.Kill(-9)
 			case syscall.SIGHUP:
 				log.Debugln("Caught SIGHUP, emit stats")
-				if ps != nil {
-					ps.Sample()
+				// Initiate non-blocking send
+				select {
+				case psChan <- agents.ProcessStatCommand{}:
+					log.Debugln("Sending psChan a msg to sample")
+				default:
+					log.Debugln("SIGHUP failed to send a sample msg on the psChan")
 				}
 			case syscall.SIGQUIT:
 				log.Debugln("Caught SIGQUIT, graceful shutdown")
-				if ps != nil {
-					ps.Sample()
+				select {
+				case psChan <- agents.ProcessStatCommand{}:
+					log.Debugln("Sending psChan a msg to sample")
+				default:
+					log.Debugln("SIGQUIT failed to send a sample msg on the psChan")
 				}
 				err = job.Stop()
 			}
@@ -235,16 +289,22 @@ func monitor(
 				job.Kill(args)
 			case "stop":
 				log.Debugln("RemoteCommand: Stop")
-				if ps != nil {
-					ps.Sample()
+				select {
+				case psChan <- agents.ProcessStatCommand{}:
+					log.Debugln("Sending psChan a msg to sample")
+				default:
+					log.Debugln("RC Stop failed to send a sample msg on the psChan")
 				}
 				if err := job.Stop(); err != nil {
 					log.Fatalf("Error received while stopping sub-process: %s\n", err)
 				}
 			case "sample":
 				log.Debugln("RemoteCommand: Sample")
-				if ps != nil {
-					ps.Sample()
+				select {
+				case psChan <- agents.ProcessStatCommand{}:
+					log.Debugln("Sending psChan a msg to sample")
+				default:
+					log.Debugln("RC Sample failed to send a sample msg on the psChan")
 				}
 			case "change_sample_rate":
 				log.Debugln("RemoteCommand: Change Stats Sample Rate")
@@ -252,7 +312,12 @@ func monitor(
 					log.Debugf("change_sample_rate arg[0]: %s\n", cmd.Arguments[0])
 					d, err := time.ParseDuration(cmd.Arguments[0])
 					if err == nil {
-						ps.NewTicker(d)
+						select {
+						case psChan <- agents.ProcessStatCommand{true, d}:
+							log.Debugln("Sending psChan a msg to update the ticker")
+						default:
+							log.Debugln("RC change_sample_rate failed to send a msg")
+						}
 					} else {
 						log.Warnf("Unparseable duration argument to command change_sample_rate")
 					}
