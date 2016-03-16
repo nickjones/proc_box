@@ -159,6 +159,8 @@ func redial(sess session) {
 
 		if err != nil {
 			log.Warnf("Failed to connect to AMQP: %q", err)
+			// Rate limit reconnection attempts
+			time.Sleep(5 * time.Second)
 		} else {
 			rc, err = agents.NewRemoteControl(sess.amqpConn, *rmtKey, *exchange)
 			if err != nil {
@@ -187,13 +189,13 @@ func redial(sess session) {
 					log.Warnf("Failed to reinitialize process stats: %s", err)
 				}
 			}
+			closings := sess.amqpConn.NotifyClose(make(chan *amqp.Error))
+
+			// Wait for close notification and loop back around to reconnect
+			_ = <-closings
+			log.Debugln("Saw a notification for closed connection, looping")
 		}
 
-		closings := sess.amqpConn.NotifyClose(make(chan *amqp.Error))
-
-		// Wait for close notification and loop back around to reconnect
-		_ = <-closings
-		log.Debugln("Saw a notification for closed connection, looping")
 	}
 }
 
