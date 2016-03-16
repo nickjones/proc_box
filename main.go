@@ -121,7 +121,7 @@ func main() {
 		amqpConfig: amqp.Config{
 			Properties: amqp.Table{
 				"product": "proc_box",
-				"version": "master",
+				"version": "v1.5.0",
 			},
 		},
 	}
