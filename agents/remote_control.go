@@ -25,7 +25,7 @@ type RemoteControlCommand struct {
 
 // NewRemoteControl creates a new watcher for external commands through AMQP
 // to control the boxed process.
-func NewRemoteControl(amqp *amqp.Connection, routingKey string, exchange string) (*RemoteControl, error) {
+func NewRemoteControl(amqp *amqp.Connection, routingKeys []string, exchange string) (*RemoteControl, error) {
 	var err error
 
 	if amqp == nil {
@@ -58,14 +58,16 @@ func NewRemoteControl(amqp *amqp.Connection, routingKey string, exchange string)
 		return nil, fmt.Errorf("Failed to acquire a remote control queue: %s\n", err)
 	}
 
-	if err = rc.channel.QueueBind(
-		remCtrlQueue.Name, // name of the queue
-		routingKey,        // bindingkey
-		exchange,          // sourceexchange
-		false,             // nowait
-		nil,               // arguments
-	); err != nil {
-		return nil, fmt.Errorf("Failed to bind the queue: %s\n", err)
+	for _, rk := range routingKeys {
+		if err = rc.channel.QueueBind(
+			remCtrlQueue.Name, // name of the queue
+			rk,                // bindingkey
+			exchange,          // sourceexchange
+			false,             // nowait
+			nil,               // arguments
+		); err != nil {
+			return nil, fmt.Errorf("Failed to bind the queue: %s\n", err)
+		}
 	}
 
 	deliveries, err := rc.channel.Consume(
@@ -84,6 +86,19 @@ func NewRemoteControl(amqp *amqp.Connection, routingKey string, exchange string)
 	go handle(deliveries, rc.done, rc.Commands)
 
 	return rc, nil
+}
+
+func bindQueue(ch *amqp.Channel, name string, key string, ex string) error {
+	if err := ch.QueueBind(
+		name,  // name of the queue
+		key,   // bindingkey
+		ex,    // sourceexchange
+		false, // nowait
+		nil,   // arguments
+	); err != nil {
+		return fmt.Errorf("Failed to bind the queue: %s\n", err)
+	}
+	return nil
 }
 
 // Shutdown gracefully stops incoming command traffic and closes the channel

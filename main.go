@@ -28,9 +28,10 @@ var (
 	noWarn           = flag.Bool("nowarn", false, "Disable warnings on stats collection.")
 	// Deprecated but left for backwards compatability for now.  Assumed this is
 	// enabled by default.
-	runAnyway  = flag.Bool("runanyway", false, "Ignore all AMQP errors (connection, message generation, etc.).")
-	msgTimeout = flag.Duration("msgtimeout", 30*time.Second, "The time allowed for a statistics mesage to be sent before giving up. (0 means never)")
-	userJSON   = flag.String("json", "", "User provided JSON to include in the statistic sample.")
+	runAnyway   = flag.Bool("runanyway", false, "Ignore all AMQP errors (connection, message generation, etc.).")
+	msgTimeout  = flag.Duration("msgtimeout", 30*time.Second, "The time allowed for a statistics mesage to be sent before giving up. (0 means never)")
+	userJSON    = flag.String("json", "", "User provided JSON to include in the statistic sample.")
+	multiRmtKey = flag.Bool("multiRmtKey", false, "Enable splitting multiple remote control keys with commas.")
 )
 
 type session struct {
@@ -41,6 +42,7 @@ type session struct {
 	psChan       chan agents.ProcessStatCommand
 	rcChan       chan chan agents.RemoteControlCommand
 	amqpConfig   amqp.Config
+	multiRmtKey  bool
 }
 
 func init() {
@@ -109,6 +111,9 @@ func main() {
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 
 	timer, err := agents.NewTimer(*wallclockTimeout)
+	if err != nil {
+		log.Warnln("Error returned creating timeout agent", err)
+	}
 	log.Debugf("Starting timer with timeout of: %v\n", *wallclockTimeout)
 	timer.Start()
 
@@ -124,6 +129,7 @@ func main() {
 				"version": "master",
 			},
 		},
+		multiRmtKey: *multiRmtKey,
 	}
 	go redial(sess)
 
@@ -154,6 +160,10 @@ func redial(sess session) {
 		}
 	}()
 
+	rcKeys := []string{*rmtKey}
+	if sess.multiRmtKey {
+		rcKeys = deleteEmpty(strings.Split(*rmtKey, ","))
+	}
 	for {
 		sess.amqpConn, err = amqp.DialConfig(*uri, sess.amqpConfig)
 
@@ -162,7 +172,7 @@ func redial(sess session) {
 			// Rate limit reconnection attempts
 			time.Sleep(5 * time.Second)
 		} else {
-			rc, err = agents.NewRemoteControl(sess.amqpConn, *rmtKey, *exchange)
+			rc, err = agents.NewRemoteControl(sess.amqpConn, rcKeys, *exchange)
 			if err != nil {
 				log.Warnf("Failed creating NewRemoteControl: %s", err)
 			} else {
@@ -367,4 +377,14 @@ func monitor(
 			}
 		}
 	}
+}
+
+func deleteEmpty(s []string) []string {
+	var r []string
+	for _, v := range s {
+		if len(v) > 0 {
+			r = append(r, v)
+		}
+	}
+	return r
 }
