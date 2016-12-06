@@ -1,6 +1,8 @@
 package agents
 
 import (
+	"os/exec"
+	"syscall"
 	"testing"
 	"time"
 
@@ -56,6 +58,27 @@ func TestGetDoneChannel(t *testing.T) {
 			jc, _ := NewControlledProcess(cmd, args, done, 0)
 			So(jc, ShouldNotBeNil)
 			So(done, ShouldEqual, jc.Done())
+		})
+	})
+}
+
+func TestGetNonZeroExitCode(t *testing.T) {
+	Convey("Given a command", t, func() {
+		cmd := "ls"
+		args := []string{"ls", "jsdlkfjlsdfkj"}
+		done := make(chan error)
+		Convey("Should return a non-zero exit code", func() {
+			jc, _ := NewControlledProcess(cmd, args, done, 0)
+			So(jc, ShouldNotBeNil)
+			jobDone := <-done
+			So(jobDone, ShouldNotEqual, nil)
+			if jobDone != nil {
+				if exiterr, ok := jobDone.(*exec.ExitError); ok {
+					if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+						So(status.ExitStatus(), ShouldNotEqual, 0)
+					}
+				}
+			}
 		})
 	})
 }
