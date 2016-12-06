@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -135,11 +136,26 @@ func main() {
 
 	go monitor(signals, rcChan, job, psChan, timer, done)
 
-	_ = <-done
+	err = <-done
 
 	elapsedTime, _ := timer.ElapsedTime()
 	// Print to standard out
 	fmt.Printf("Task elapsed time: %.2f seconds.\n", elapsedTime.Seconds())
+
+	if err != nil {
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			// Non-zero exit code
+			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+				exitStatus := status.ExitStatus()
+				log.Debugf("Exit Status: %d\n", exitStatus)
+				os.Exit(exitStatus)
+			}
+		} else {
+			log.Debugf("cmd.Wait: %v\n", err)
+		}
+	} else {
+		os.Exit(0)
+	}
 }
 
 func redial(sess session) {
@@ -226,8 +242,8 @@ func monitor(
 			panic(e)
 		}
 	}()
-	var err error
 	var logSampling <-chan time.Time
+	var err error
 
 	if *stdoutByteLimit > 0 {
 		ticker := time.NewTicker(100 * time.Millisecond)
@@ -288,7 +304,6 @@ func monitor(
 			case "kill":
 				log.Debugln("RemoteCommand: Kill")
 				var args int64
-				var err error
 				if len(cmd.Arguments) == 0 {
 					args = -9
 				} else {
@@ -307,7 +322,7 @@ func monitor(
 				default:
 					log.Debugln("RC Stop failed to send a sample msg on the psChan")
 				}
-				if err := job.Stop(); err != nil {
+				if err = job.Stop(); err != nil {
 					log.Fatalf("Error received while stopping sub-process: %s\n", err)
 				}
 			case "sample":
@@ -325,7 +340,9 @@ func monitor(
 					d, err := time.ParseDuration(cmd.Arguments[0])
 					if err == nil {
 						select {
-						case psChan <- agents.ProcessStatCommand{true, d}:
+						case psChan <- agents.ProcessStatCommand{
+							TimeUpdate: true,
+							NewTime:    d}:
 							log.Debugln("Sending psChan a msg to update the ticker")
 						default:
 							log.Debugln("RC change_sample_rate failed to send a msg")
@@ -338,22 +355,22 @@ func monitor(
 				}
 			case "timer_reset":
 				log.Debugln("RemoteCommand: Timer Reset")
-				if err := timer.Reset(); err != nil {
+				if err = timer.Reset(); err != nil {
 					log.Fatalf("Error received from timer calling Reset: %s\n", err)
 				}
 			case "timer_start":
 				log.Debugln("RemoteCommand: Timer Start")
-				if err := timer.Start(); err != nil {
+				if err = timer.Start(); err != nil {
 					log.Fatalf("Error received from timer calling Start: %s\n", err)
 				}
 			case "timer_stop":
 				log.Debugln("RemoteCommand: Timer Stop")
-				if err := timer.Stop(); err != nil {
+				if err = timer.Stop(); err != nil {
 					log.Fatalf("Error received from timer calling Stop: %s\n", err)
 				}
 			case "timer_resume":
 				log.Debugln("RemoteCommand: Timer Resume")
-				if err := timer.Resume(); err != nil {
+				if err = timer.Resume(); err != nil {
 					log.Fatalf("Error received from timer calling Resume: %s\n", err)
 				}
 			default:
@@ -361,14 +378,14 @@ func monitor(
 			}
 		case timeoutMsg := <-timer.Done():
 			log.Debugf("Timer timeout message: %s\n", timeoutMsg)
-			if err := job.Stop(); err != nil {
+			if err = job.Stop(); err != nil {
 				log.Fatalf("Error received while stopping sub-process: %v\n", err)
 				// If there was an error stopping the process, kill the porcess.
 				job.Kill(-9)
 			}
-		case _ = <-job.Done():
+		case jobDone := <-job.Done():
 			log.Debugln("Command exited gracefully; shutting down.")
-			done <- err
+			done <- jobDone
 		case _ = <-logSampling:
 			if job.StdoutByteCount() > 2*(*stdoutByteLimit) {
 				err = job.Kill(-9)
