@@ -33,6 +33,10 @@ var (
 	msgTimeout  = flag.Duration("msgtimeout", 30*time.Second, "The time allowed for a statistics mesage to be sent before giving up. (0 means never)")
 	userJSON    = flag.String("json", "", "User provided JSON to include in the statistic sample.")
 	multiRmtKey = flag.Bool("multiRmtKey", false, "Enable splitting multiple remote control keys with commas.")
+	version     = flag.Bool("version", false, "Show version.")
+
+	VERSION   = "development"
+	BUILDDATE = "now-ish"
 )
 
 type session struct {
@@ -74,6 +78,11 @@ func init() {
 }
 
 func main() {
+
+	if *version {
+		fmt.Printf("proc_box version %s build on %s\n", VERSION, BUILDDATE)
+		os.Exit(0)
+	}
 	if *debugMode {
 		log.SetLevel(log.DebugLevel)
 	} else if *noWarn {
@@ -127,7 +136,7 @@ func main() {
 		amqpConfig: amqp.Config{
 			Properties: amqp.Table{
 				"product": "proc_box",
-				"version": "master",
+				"version": VERSION,
 			},
 		},
 		multiRmtKey: *multiRmtKey,
