@@ -80,7 +80,7 @@ func init() {
 func main() {
 
 	if *version {
-		fmt.Printf("proc_box version %s build on %s\n", VERSION, BUILDDATE)
+		fmt.Printf("proc_box version %s built %s\n", VERSION, BUILDDATE)
 		os.Exit(0)
 	}
 	if *debugMode {
